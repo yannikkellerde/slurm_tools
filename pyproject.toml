@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+[project]
+name = "slurm_tools"
+dynamic = ["version"]
+dependencies = [
+  "pyyaml"
+]
+requires-python = ">= 3.10"
+authors = [
+  {name = "Yannik Keller", email = "yannik@kelnet.de"},
+]
+description = "Run some slurm jobs"
+readme = "README.md"
+license = {text = "MIT License"}
+keywords = ["Cluster", "Slurm", "HPC"]
+[tool.hatch.version]
+path = "slurm_tools/__init__.py"
+[project.scripts]
+slurm_job = "slurm_tools.do_slurm_job:slurm_job"
+param_sweep = "slurm_tools.param_sweep:main"
