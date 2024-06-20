@@ -26,10 +26,9 @@ srun bash -c "apptainer exec \
 	--nv \
     --contain \
     --cleanenv \
-    --pwd /root/sh_finetuning \
-    --bind .:/root/sh_finetuning \
+    --pwd /root/{project_root} \
+    --bind .:/root/{project_root} \
     --bind ~/.cache/huggingface:/root/.cache/huggingface \
-    --bind ~/huggingface:/root/huggingface \
     --bind ~/models:/root/models \
     --bind ~/runs:/root/runs \
     --env HUGGING_FACE_HUB_TOKEN='$HUGGINGFACE_TOKEN' \
@@ -45,6 +44,6 @@ srun bash -c "apptainer exec \
     --env NCCL_DEBUG_SUBSYS=ALL
     --env TORCH_DISTRIBUTED_DEBUG=INFO
 	{image} \
-    {distribute} sh_finetuning/__main__.py {program_call}"
+    {distribute} {program_call}"
 
 #     --env PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 \

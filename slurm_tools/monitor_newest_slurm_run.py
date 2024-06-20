@@ -1,7 +1,8 @@
 import argparse
 import os
 
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--watch", action="store_true", help="watch it")
     parser.add_argument("--watchtime", type=int, default=1, help="seconds")
@@ -32,3 +33,7 @@ if __name__ == "__main__":
         os.system(f"watch -n {args.watchtime} tac {files[args.oldness]}")
     else:
         os.system(f"cat {files[args.oldness]}")
+
+
+if __name__ == "__main__":
+    main()

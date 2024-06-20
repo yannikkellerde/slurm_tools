@@ -24,6 +24,7 @@ def slurm_job(
     acc_config,
     n_nodes,
     dry,
+    conda_env,
     **_kwargs,
 ):
     if n_gpu == 1 and n_nodes == 1:
@@ -64,21 +65,25 @@ def slurm_job(
 
     n_cpu = n_gpu * 18
 
+    format_dict = dict(
+        job_dir=job_specific_dir,
+        job_id=job_id,
+        project_name="sh_finetune",
+        experiment_name=run_group,
+        n_gpu=n_gpu,
+        n_cpu=n_cpu,
+        time=time,
+        program_call=program_call,
+        image=image,
+        partition=partition,
+        n_nodes=n_nodes,
+        distribute=distribute,
+        conda_env=conda_env,
+        project_root=os.path.basename(os.path.dirname(".")),
+    )
+
     with open(template_file, "r") as file:
-        script = file.read().format(
-            job_dir=job_specific_dir,
-            job_id=job_id,
-            project_name="sh_finetune",
-            experiment_name=run_group,
-            n_gpu=n_gpu,
-            n_cpu=n_cpu,
-            time=time,
-            program_call=program_call,
-            image=image,
-            partition=partition,
-            n_nodes=n_nodes,
-            distribute=distribute,
-        )
+        script = file.read().format(**format_dict)
 
     output_path = os.path.join(job_specific_dir, "slurm_script.sh")
     with open(output_path, "w") as file:
@@ -121,6 +126,7 @@ def obtain_parser():
         "--acc_config", type=str, default="config/accelerate/acc_config_DDP.yml"
     )
     parser.add_argument("--n_nodes", type=int, default=1, help="Number of Nodes")
+    parser.add_argument("--conda_env", type=str, default=None, help="Env to activate")
 
     return parser
 
