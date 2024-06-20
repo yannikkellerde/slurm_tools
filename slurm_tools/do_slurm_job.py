@@ -1,4 +1,5 @@
 import argparse
+from argparse import Namespace
 import os
 import subprocess
 from datetime import datetime
@@ -51,7 +52,7 @@ def slurm_job(
     elif launcher == "torchrun":
         distribute = f"python -m torch.distributed.run --nnodes=$SLURM_NNODES --nproc-per-node={n_gpu} --rdzv-id=$SLURM_JOBID --rdzv-endpoint=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1) --rdzv-backend=c10d"
     else:
-        distribute = "python"
+        distribute = launcher
 
     job_id = generate_local_job_id()
     partition = "gpu"

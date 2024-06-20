@@ -24,9 +24,9 @@ def param_sweep_grid(sweep_params: dict[str, list], program_call: str, **job_kwa
     values = list(sweep_params.values())
     for param_values in itertools.product(*values):
         param_choices = dict(zip(keys, param_values))
-        program_call = f"{program_call} {format_param_choices(param_choices)}"
+        choice_program_call = f"{program_call} {format_param_choices(param_choices)}"
 
-        slurm_job(program_call=program_call, **job_kwargs)
+        slurm_job(program_call=choice_program_call, **job_kwargs)
 
 
 def main():
@@ -43,4 +43,7 @@ def main():
     if args.sweep_params:
         sweep_config.update(json.loads(args.sweep_params))
 
-    param_sweep_grid(**sweep_config, **vars(args))
+    delattr(args, "sweep_config_path")
+    delattr(args, "sweep_params")
+
+    param_sweep_grid(sweep_config, **vars(args))
