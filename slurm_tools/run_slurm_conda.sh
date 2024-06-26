@@ -26,8 +26,9 @@ export WANDB_NAME='{job_id}'
 
 export NCCL_BLOCKING_WAIT='0'
 
-export CMD="{distribute} {program_call}"
+export CMD="{distribute} {program_call}{afterwards}"
 
+rm keepalive
 echo $CMD
 echo $SLURM_PROCID
 

@@ -26,6 +26,8 @@ def slurm_job(
     n_nodes,
     dry,
     conda_env,
+    keepalive,
+    project,
     **_kwargs,
 ):
     if n_gpu == 1 and n_nodes == 1:
@@ -54,6 +56,11 @@ def slurm_job(
     else:
         distribute = launcher
 
+    if keepalive > 0:
+        afterwards = f";sleep {keepalive};while cat keepalive; do sleep 5;done"
+    else:
+        afterwards = ""
+
     job_id = generate_local_job_id()
     partition = "gpu"
     dest_dir = (
@@ -69,7 +76,7 @@ def slurm_job(
     format_dict = dict(
         job_dir=job_specific_dir,
         job_id=job_id,
-        project_name="sh_finetune",
+        project_name=project,
         experiment_name=run_group,
         n_gpu=n_gpu,
         n_cpu=n_cpu,
@@ -81,6 +88,7 @@ def slurm_job(
         distribute=distribute,
         conda_env=conda_env,
         project_root=os.path.basename(os.path.dirname(".")),
+        afterwards=afterwards,
     )
 
     with open(template_file, "r") as file:
@@ -128,6 +136,13 @@ def obtain_parser():
     )
     parser.add_argument("--n_nodes", type=int, default=1, help="Number of Nodes")
     parser.add_argument("--conda_env", type=str, default=None, help="Env to activate")
+    parser.add_argument(
+        "--keepalive",
+        type=int,
+        default=0,
+        help="Keep job alive after it finished for x seconds",
+    )
+    parser.add_argument("--project", type=str, default="slurm_project")
 
     return parser
 
