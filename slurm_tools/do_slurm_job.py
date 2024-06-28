@@ -1,5 +1,4 @@
 import argparse
-from argparse import Namespace
 import os
 import subprocess
 from datetime import datetime
@@ -56,8 +55,8 @@ def slurm_job(
     else:
         distribute = launcher
 
-    if keepalive > 0:
-        afterwards = f";sleep {keepalive};while cat keepalive; do sleep 5;done"
+    if keepalive:
+        afterwards = f";while true;sleep 5;pgrep -U $USER python && continue;sleep {keepalive};pgrep -U $USER python || break;done"
     else:
         afterwards = ""
 
@@ -90,6 +89,22 @@ def slurm_job(
         project_root=os.path.basename(os.path.dirname(".")),
         afterwards=afterwards,
     )
+
+    if keepalive:
+        redos_path = os.path.join(os.path.abspath(__file__), "redos")
+        os.makedirs(redos_path, exist_ok=True)
+        with open(os.path.join(redos_path, f"{job_id}"), "w") as file:
+            file.write(f"{os.path.join(job_specific_dir, 'redo.bash')}")
+
+        redos_files = [os.path.join(redos_path, f) for f in os.listdir(redos_path)]
+        if len(redos_files) > 10:
+            oldest_file = min(redos_files, key=os.path.getctime)
+            os.remove(oldest_file)
+
+        with open(os.path.join(job_specific_dir, "redo.bash"), "w") as file:
+            file.write(
+                f"cd {os.getcwd()};source ~/.condasetup_bash;conda activate {conda_env};{distribute} {program_call}"
+            )
 
     with open(template_file, "r") as file:
         script = file.read().format(**format_dict)
