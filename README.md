@@ -60,5 +60,5 @@ Easy way to start and debug slurm jobs using conda on one or muliple nodes / gpu
         * `param_sweep --n_gpu 1 --time 00:20:00 --program_call "main.py" --conda_env my_conda_env --sweep_params "{'batch_size':[32, 64], 'lr':[1e-4,1e-5]}"`
 + Apptainer support
     - For now, only conda is really supported. But there is `run_slurm_apptainer.sh` which may be a good starting point to get this tool to work with apptainer.
-+ Accelerate support
++ Accelerate as a launcher support
     - For now, only torchrun is supported. But accelerate was supported by this codebase once, so it should not be too hard to make it work again.
