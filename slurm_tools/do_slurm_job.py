@@ -56,7 +56,7 @@ def slurm_job(
         distribute = launcher
 
     if keepalive:
-        afterwards = f";while true;sleep 5;pgrep -U $USER python && continue;sleep {keepalive};pgrep -U $USER python || break;done"
+        afterwards = f";while true;do sleep 5;pgrep -U $USER python >/dev/null && continue;sleep {keepalive};pgrep -U $USER python >/dev/null || break;done"
     else:
         afterwards = ""
 
@@ -91,7 +91,7 @@ def slurm_job(
     )
 
     if keepalive:
-        redos_path = os.path.join(os.path.abspath(__file__), "redos")
+        redos_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "redos")
         os.makedirs(redos_path, exist_ok=True)
         with open(os.path.join(redos_path, f"{job_id}"), "w") as file:
             file.write(f"{os.path.join(job_specific_dir, 'redo.bash')}")
@@ -103,7 +103,7 @@ def slurm_job(
 
         with open(os.path.join(job_specific_dir, "redo.bash"), "w") as file:
             file.write(
-                f"cd {os.getcwd()};source ~/.condasetup_bash;conda activate {conda_env};{distribute} {program_call}"
+                f"cd {os.getcwd()};source ~/.condasetup_bash;conda activate {conda_env};{distribute} -u {program_call}"
             )
 
     with open(template_file, "r") as file:

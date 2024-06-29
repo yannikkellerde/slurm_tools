@@ -28,7 +28,6 @@ export NCCL_BLOCKING_WAIT='0'
 
 export CMD="{distribute} {program_call}{afterwards}"
 
-rm keepalive
 echo $CMD
 echo $SLURM_PROCID
 

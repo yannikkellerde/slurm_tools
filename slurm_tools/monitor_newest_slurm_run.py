@@ -29,6 +29,7 @@ def main():
         [],
     )
     files.sort(key=lambda x: -os.path.getmtime(x))
+    print(files[args.oldness])
     if args.watch:
         os.system(f"watch -n {args.watchtime} tac {files[args.oldness]}")
     else:

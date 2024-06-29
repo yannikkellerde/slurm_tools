@@ -1,7 +1,7 @@
 import os
 import argparse
 
-redos_path = os.path.join(os.path.abspath(__file__), "redos")
+redos_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "redos")
 
 
 def redo(oldness, execute=False):
@@ -10,10 +10,22 @@ def redo(oldness, execute=False):
 
     with open(files[oldness], "r") as file:
         contents = file.read()
-        print(contents)
 
     if execute:
-        os.system(f"sh {contents}")
+        print(contents)
+        log_folder = os.path.dirname(contents)
+        existing_logfiles = [
+            f
+            for f in os.listdir(log_folder)
+            if f.startswith("slurm-") and f.endswith(".out")
+        ]
+        redo_name = os.path.join(log_folder, f"slurm-redo-{len(existing_logfiles)}.out")
+        os.system(f"sh {contents} > {redo_name} 2>&1")
+
+    else:
+        print(
+            f"Your redo file is at {contents}. Edit it as you please and then run it using 'redo --execute.'"
+        )
 
 
 def main():
