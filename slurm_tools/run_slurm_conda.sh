@@ -16,7 +16,7 @@
 #SBATCH --time={time}
 
 module load anaconda/3/2021.11
-source ~/.condasetup_bash
+source {cinit_file}
 conda activate {conda_env}
 
 export WANDB_ENTITY='chm-hci'

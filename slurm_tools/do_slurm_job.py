@@ -27,6 +27,7 @@ def slurm_job(
     conda_env,
     keepalive,
     project,
+    cinit,
     **_kwargs,
 ):
     if n_gpu == 1 and n_nodes == 1:
@@ -88,6 +89,7 @@ def slurm_job(
         conda_env=conda_env,
         project_root=os.path.basename(os.path.dirname(".")),
         afterwards=afterwards,
+        cinit=cinit,
     )
 
     if keepalive:
@@ -158,6 +160,9 @@ def obtain_parser():
         help="Keep job alive after it finished for x seconds",
     )
     parser.add_argument("--project", type=str, default="slurm_project")
+    parser.add_argument(
+        "--cinit", type=str, default=os.path.join(basedir, ".condasetup_bash")
+    )
 
     return parser
 
