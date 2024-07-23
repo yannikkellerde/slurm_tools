@@ -14,20 +14,20 @@ def generate_local_job_id():
 
 
 def slurm_job(
-    n_gpu,
-    time,
-    template_file,
-    run_group,
-    program_call,
-    image,
-    launcher,
-    acc_config,
-    n_nodes,
-    dry,
-    conda_env,
-    keepalive,
-    project,
-    cinit,
+    n_gpu: int,
+    time: str,
+    template_file: str,
+    run_group: str,
+    program_call: str,
+    image: str,
+    launcher: str,
+    acc_config: str,
+    n_nodes: int,
+    dry: bool,
+    conda_env: str,
+    keepalive: bool,
+    project: str,
+    cinit: str,
     **_kwargs,
 ):
     if n_gpu == 1 and n_nodes == 1:
@@ -61,6 +61,9 @@ def slurm_job(
     else:
         afterwards = ""
 
+    if program_call.startswith("python "):
+        print("No need to include the launcher (python) in the program call.")
+        program_call = program_call.removeprefix("python ")
     job_id = generate_local_job_id()
     partition = "gpu"
     dest_dir = (
