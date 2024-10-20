@@ -38,7 +38,7 @@ Easy way to start and debug slurm jobs using conda on one or muliple nodes / gpu
     - Check more parameters using `slurm_job --help`
     
 + Track outputs of slurm jobs.
-    - Use the `monitor_slurm` utility. It will show the outputs of the most recent slurm_job.
+    - Use the `monitor_run` utility. It will show the outputs of the most recent slurm_job.
     - Add `--watch` to follow it continually.
     - Outputs, scripts and redo files are logged in your `~/runs` folder
     
