@@ -6,7 +6,7 @@
 #SBATCH --nodes={n_nodes}
 #
 #SBATCH --cpus-per-task={n_cpu}
-#SBATCH --mem=0
+#SBATCH --mem={mem}
 #
 #SBATCH --constraint="gpu"
 #SBATCH --gres=gpu:a100:{n_gpu}

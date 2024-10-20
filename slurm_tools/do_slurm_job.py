@@ -28,6 +28,8 @@ def slurm_job(
     keepalive: bool,
     project: str,
     cinit: str,
+    mem: str,
+    dependencies: list[int],
     **_kwargs,
 ):
     if n_gpu == 1 and n_nodes == 1:
@@ -65,7 +67,6 @@ def slurm_job(
         print("No need to include the launcher (python) in the program call.")
         program_call = program_call.removeprefix("python ")
     job_id = generate_local_job_id()
-    partition = "gpu"
     dest_dir = (
         "/root/runs"
         if "apptainer" in template_file
@@ -86,13 +87,13 @@ def slurm_job(
         time=time,
         program_call=program_call,
         image=image,
-        partition=partition,
         n_nodes=n_nodes,
         distribute=distribute,
         conda_env=conda_env,
         project_root=os.path.basename(os.path.dirname(".")),
         afterwards=afterwards,
         cinit=cinit,
+        mem=mem,
     )
 
     if keepalive:
@@ -119,7 +120,16 @@ def slurm_job(
         file.write(script)
 
     if not dry:
-        subprocess.run(["sbatch", output_path])
+        if dependencies:
+            subprocess.run(
+                [
+                    "sbatch",
+                    "--dependency=afterok:" + ":".join(map(str, dependencies)),
+                    output_path,
+                ]
+            )
+        else:
+            subprocess.run(["sbatch", output_path])
 
 
 def obtain_parser():
@@ -163,8 +173,12 @@ def obtain_parser():
         help="Keep job alive after it finished for x seconds",
     )
     parser.add_argument("--project", type=str, default="slurm_project")
+    parser.add_argument("--mem", type=str, default="0")
     parser.add_argument(
         "--cinit", type=str, default=os.path.join(basedir, ".condasetup_bash")
+    )
+    parser.add_argument(
+        "--dependencies", type=int, nargs="+", help="List of dependent jobs."
     )
 
     return parser
