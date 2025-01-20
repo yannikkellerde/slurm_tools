@@ -30,6 +30,7 @@ def slurm_job(
     cinit: str,
     mem: str,
     dependencies: list[int],
+    n_cpu: int,
     **_kwargs,
 ):
     if n_gpu == 1 and n_nodes == 1:
@@ -75,7 +76,8 @@ def slurm_job(
     job_specific_dir = os.path.join(dest_dir, run_group, job_id)
     os.makedirs(job_specific_dir, exist_ok=True)
 
-    n_cpu = n_gpu * 18
+    if n_cpu == 0:
+        n_cpu = max(1, n_gpu) * 18
 
     format_dict = dict(
         job_dir=job_specific_dir,
@@ -180,6 +182,7 @@ def obtain_parser():
     parser.add_argument(
         "--dependencies", type=int, nargs="+", help="List of dependent jobs."
     )
+    parser.add_argument("--n_cpu", type=int, default=0, help="Number of CPUs to use.")
 
     return parser
 
