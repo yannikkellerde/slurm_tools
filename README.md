@@ -4,6 +4,19 @@
 # Goal
 Easy way to start and debug slurm jobs using conda on one or muliple nodes / gpus.
 
+## Main usage
++ Quickly start a batched slurm job: `slurm_job --n_gpu 4 --time 00:20:00 --launcher torchrun --n_nodes 2 --program_call "main.py --config default.yml" --conda_env my_conda_env`
+    - Select launcher `python` for single GPU jobs and `torchrun` for multi-gpu DDP jobs
+    - Easy integration with conda/miniforge by setting conda_env
+    - Example for single gpu job: `slurm_job --n_gpu 1 --time 2:30:00 --launcher python --n_nodes 1 --program_call "script.py --config hey.yml" --mem 120GB --conda_env sh_finetune_new`
++ Easily monitor the logs of the recently started jobs: `monitor_run --oldness 0`
+
+## More essential slurm knowledge
++ monitor your slurm jobs `squeue --me`
++ Attach shell to running job `srun --pty --overlap --jobid 15588005 bash` (find jobid via squeue)
++ Get a GPU shell `srun -p gpu --gres=gpu:a100:1 --mem=120GB --time=05:30:00 --pty bash`
++ Cancel a job `scancel 15588005` (find jobid via squeue)
+
 ## What you can do with slurm without this tool
 + Get a one GPU debugging shell `srun -p gpu --cpus-per-task=18 --gres=gpu:a100:1 --mem=0 --time=01:00:00 --pty bash`
 + Create an sbatch file manually and run it on multiple gpus `sbatch path/to/sbatch/script`
