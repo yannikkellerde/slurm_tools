@@ -17,22 +17,7 @@ Easy way to start and debug slurm jobs using conda on one or muliple nodes / gpu
 + Get a GPU shell `srun -p gpu --gres=gpu:a100:1 --mem=120GB --time=05:30:00 --pty bash`
 + Cancel a job `scancel 15588005` (find jobid via squeue)
 
-## What you can do with slurm without this tool
-+ Get a one GPU debugging shell `srun -p gpu --cpus-per-task=18 --gres=gpu:a100:1 --mem=0 --time=01:00:00 --pty bash`
-+ Create an sbatch file manually and run it on multiple gpus `sbatch path/to/sbatch/script`
-+ Check your running jobs `squeue --me`
-+ Cancel jobs `scancel {jobid}`
-+ Attach shell to running job `srun --pty --overlap --jobid {jobid} bash`
-
 ## Typical troubles while using slurm without this tool
-+ You want to test/debug your multi-gpu application. 
-    1. You write an sbatch script for it.
-    2. You submit the job.
-    3. It takes 10 min for slurm to allocate gpus for your job.
-    4. Then your job fails immediately because of a typo.
-    5. You fix the typo in 5 seconds and resubmit the job. It takes 30 min this time for slurm to allocate the gpus.
-    6. Your debuggig process is very slow  
-
 + You want to work on a new project.
     - In addition to the project code, you'll have to design a new sbatch file and probably include it in your repo.
     - Each time you want to change run parameters such as memory, gpu, time or conda env, you'll have to change the sbatch file.
@@ -54,16 +39,6 @@ Easy way to start and debug slurm jobs using conda on one or muliple nodes / gpu
     - Use the `monitor_run` utility. It will show the outputs of the most recent slurm_job.
     - Add `--watch` to follow it continually.
     - Outputs, scripts and redo files are logged in your `~/runs` folder
-    
-+ Debug multi-gpu application
-    - Add `--keepalive 400` to your `slurm_job` parameters. Your slurm_job now won't stop for 400 seconds after your program_call fails.
-    - Monitor your slurm job using the `monitor_slurm` utility. If your code fails or stops, you now have 400 seconds to restart the program using the same slurm job / gpu allocation.
-    - Use the `attach` utility to attach a shell to your slurm job.
-    - Call `redo` to get the path to your redo file. You may edit the contents of that file to call your program in a slightly different way.
-    - Run `redo --execute` to rerun your job using the redo file.
-    - Your slurm_job won't stop as long you are running a python application plus 400 seconds.
-    - You can monitor the outputs of the redo using the `monitor_slum` tool (just like any other job).
-    - You can also set the keepalive value to different values. However, be aware that you are risking blocking the gpus without using them for keepalive seconds. So to treat the HPC clusters resources well, use only low keepalive values. Especially if you are using a lot of gpus.
     
 # Experimental
 + Parameter sweep
