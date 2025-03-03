@@ -1,7 +1,7 @@
 import argparse
 import subprocess
 import os
-import datetime
+from datetime import datetime
 
 basedir = os.path.dirname(os.path.abspath(__file__))
 
@@ -25,29 +25,43 @@ def slurm_job(
     experiment_name,
     mamba_setup_path,
     n_gpu,
+    sglang_nodes,
+    additional_sglang_args,
+    skip_capture_cuda_graph=False,
 ):
-    tp_size = n_nodes * n_gpu
+    tp_size = (sglang_nodes or n_nodes) * n_gpu
     if mamba_env is None:
         conda_activate = ""
     else:
-        conda_activate = f"source {mamba_setup_path} && mamba activate {mamba_env}"
+        conda_activate = f"source {os.path.expanduser(mamba_setup_path)} && mamba activate {mamba_env}"
 
     job_id = generate_local_job_id()
     dest_dir = os.path.join(os.environ["HOME"], "runs")
     job_specific_dir = os.path.join(dest_dir, experiment_name, job_id)
+    os.makedirs(job_specific_dir, exist_ok=True)
+
+    if skip_capture_cuda_graph:
+        capture_cuda = "--disable-cuda-graph"
+    else:
+        capture_cuda = ""
 
     with open(template_file, "r") as f:
         script = f.read().format(
             model=model,
             command=command,
             time=time,
-            sif_path=image,
+            sif_path=os.path.expanduser(image),
             n_nodes=n_nodes,
             job_dir=job_specific_dir,
+            job_id=job_id,
             n_gpu=n_gpu,
             tp_size=tp_size,
             conda_activate=conda_activate,
             basepath=basedir,
+            experiment_name=experiment_name,
+            sglang_nodes=sglang_nodes,
+            capture_cuda=capture_cuda,
+            additional_sglang_args=additional_sglang_args,
         )
 
     output_path = os.path.join(job_specific_dir, "slurm_script.sh")
@@ -70,7 +84,7 @@ def obtain_parser():
     parser.add_argument(
         "--dry", action="store_true", help="Only create files, do not submit the job."
     )
-    parser.add_argument("--n_gpu", type=int, default=1, help="Number of GPUs to use.")
+    parser.add_argument("--n_gpu", type=int, default=2, help="Number of GPUs to use.")
     parser.add_argument(
         "--time",
         type=str,
@@ -87,8 +101,23 @@ def obtain_parser():
         help="Apptainer image to use",
     )
     parser.add_argument("--n_nodes", type=int, default=1, help="Number of Nodes")
+    parser.add_argument(
+        "--sglang_nodes", type=int, default=None, help="Number of sglang Nodes"
+    )
+    parser.add_argument("--skip_capture_cuda_graph", action="store_true")
     parser.add_argument("--mamba_env", type=str, default=None, help="Env to activate")
     parser.add_argument("--experiment_name", type=str, default="sglang")
     parser.add_argument("--mamba_setup_path", type=str, default="~/.mambasetup.bash")
+    parser.add_argument("--additional_sglang_args", type=str, default="")
 
     return parser
+
+
+def main():
+    parser = obtain_parser()
+    args = parser.parse_args()
+    slurm_job(**vars(args))
+
+
+if __name__ == "__main__":
+    main()

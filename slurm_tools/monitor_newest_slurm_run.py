@@ -14,16 +14,37 @@ def main():
         help="where do they be areing",
     )
     parser.add_argument("--script", action="store_true")
+    parser.add_argument("--server_log", type=int, default=None)
+    parser.add_argument("--gpu_log", type=int, default=None)
+    parser.add_argument("--command_log", type=int, default=None)
     args = parser.parse_args()
+
+    assert (
+        sum(
+            [
+                args.script,
+                args.server_log is not None,
+                args.gpu_log is not None,
+                args.command_log is not None,
+            ]
+        )
+        <= 1
+    )
+
+    def predicate(n):
+        if args.script:
+            return n == "slurm_script.sh"
+        if args.server_log is not None:
+            return n.startswith("server.log") and n.endswith(f".{args.server_log}")
+        if args.gpu_log is not None:
+            return n.startswith("gpus") and n.endswith(f"{args.gpu_log}.log")
+        if args.command_log is not None:
+            return n.startswith("command") and n.endswith(f"{args.command_log}.log")
+        return n.startswith("slurm-") and n.endswith(".out")
 
     files = sum(
         [
-            [
-                os.path.join(p, n)
-                for n in f
-                if (args.script and n == "slurm_script.sh")
-                or (not args.script and n.startswith("slurm-") and n.endswith(".out"))
-            ]
+            [os.path.join(p, n) for n in f if predicate(n)]
             for p, s, f in os.walk(args.path)
         ],
         [],

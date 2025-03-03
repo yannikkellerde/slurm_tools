@@ -23,13 +23,13 @@ module load apptainer/1.3.2
 
 MODEL='{model}'
 
-NNODES={n_nodes}
+HEAD_NODE=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
+NNODES={sglang_nodes}
 TP_SIZE={tp_size}
 HEAD_HOSTNAME="$(hostname)"
 HEAD_IPADDRESS="$(hostname --ip-address)"
 PORT=8998
 
-# from: `apptainer pull docker://lmsysorg/sglang:v0.4.1.post4-rocm620`
 SIF="{sif_path}"
 
 
@@ -37,12 +37,20 @@ echo "########## Starting the server ... ##########"
 
 apptainer_cmd="apptainer exec \
     -B /ptmp/$USER/huggingface:/root/.cache/huggingface \
+    -B /ptmp/$USER/.cache:/u/$USER/.cache \
+    -B /u/$USER/.triton:/u/$USER/.triton \
     --env HF_HOME=/root/.cache/huggingface \
     --env HF_HUB_OFFLINE=1 \
     --env TOKENIZERS_PARALLELISM=false \
-    --env OUTLINES_CACHE_DIR=\$JOB_SHMTMPDIR/outlines_cache \
+    --no-home \
+    --nv \
     $SIF"
 
+little_apptainer_cmd="apptainer exec \
+    -B /ptmp/$USER/.cache:/u/$USER/.cache \
+    -B /u/$USER/.triton:/u/$USER/.triton \
+    --no-home \
+    $SIF"
 
 sglang_cmd="python3 -m sglang.launch_server \
     --model-path $MODEL \
@@ -50,17 +58,18 @@ sglang_cmd="python3 -m sglang.launch_server \
     --nccl-init-addr $HEAD_IPADDRESS:$PORT \
     --nnodes $NNODES \
     --node-rank \$SLURM_NODEID \
-    --trust-remote-code \
+    --host 0.0.0.0 \
+    {additional_sglang_args} \
     {capture_cuda}"
-
-srun -o "{job_dir}/server.log.%j.%n" bash -c "{basepath}/monitor_gpu.sh > {job_dir}/gpus_node\$SLURM_NODEID.log 2>&1 & $apptainer_cmd $sglang_cmd" &
-
-echo "########## Waiting for the server ... ##########"
-
-apptainer exec $SIF python3 -c "from sglang.utils import wait_for_server; wait_for_server('http://localhost:30000')"
-
-
-echo "########## Sending the request ... ##########"
-
-{conda_activate}
-{command}
+        
+srun -o "{job_dir}/server.log.%j.%n" bash -c "
+echo \$SLURM_NODEID >> {job_dir}/nodeid
+if [ \$SLURM_NODEID -lt $NNODES ]; then
+    $apptainer_cmd $sglang_cmd
+else
+    echo \"Waiting for the server to start ...\"
+    {conda_activate}
+    apptainer exec -B /ptmp/$USER/.cache:/u/$USER/.cache -B /u/$USER/.triton:/u/$USER/.triton --no-home $SIF python3 -c \"from sglang.utils import wait_for_server; wait_for_server('http://$HEAD_NODE:30000')\"
+    echo \"Server started. Sending the request ...\"
+    {command} $MODEL $HEAD_NODE
+fi"

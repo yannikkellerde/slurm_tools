@@ -18,9 +18,6 @@
 # Wall clock limit (max. is 24 hours):
 #SBATCH --time={time}
 
-module purge
-module load apptainer/1.3.2
-
 MODEL='{model}'
 
 NNODES={n_nodes}
@@ -29,20 +26,9 @@ HEAD_HOSTNAME="$(hostname)"
 HEAD_IPADDRESS="$(hostname --ip-address)"
 PORT=8998
 
-# from: `apptainer pull docker://lmsysorg/sglang:v0.4.1.post4-rocm620`
-SIF="{sif_path}"
-
-
 echo "########## Starting the server ... ##########"
 
-apptainer_cmd="apptainer exec \
-    -B /ptmp/$USER/huggingface:/root/.cache/huggingface \
-    --env HF_HOME=/root/.cache/huggingface \
-    --env HF_HUB_OFFLINE=1 \
-    --env TOKENIZERS_PARALLELISM=false \
-    --env OUTLINES_CACHE_DIR=\$JOB_SHMTMPDIR/outlines_cache \
-    $SIF"
-
+{conda_activate}
 
 sglang_cmd="python3 -m sglang.launch_server \
     --model-path $MODEL \
@@ -50,17 +36,15 @@ sglang_cmd="python3 -m sglang.launch_server \
     --nccl-init-addr $HEAD_IPADDRESS:$PORT \
     --nnodes $NNODES \
     --node-rank \$SLURM_NODEID \
-    --trust-remote-code \
     {capture_cuda}"
 
-srun -o "{job_dir}/server.log.%j.%n" bash -c "{basepath}/monitor_gpu.sh > {job_dir}/gpus_node\$SLURM_NODEID.log 2>&1 & $apptainer_cmd $sglang_cmd" &
+srun -o "{job_dir}/server.log.%j.%n" bash -c "$sglang_cmd" &
 
 echo "########## Waiting for the server ... ##########"
 
-apptainer exec $SIF python3 -c "from sglang.utils import wait_for_server; wait_for_server('http://localhost:30000')"
+python -c "from sglang.utils import wait_for_server; wait_for_server('http://localhost:30000')"
 
 
 echo "########## Sending the request ... ##########"
 
-{conda_activate}
 {command}
