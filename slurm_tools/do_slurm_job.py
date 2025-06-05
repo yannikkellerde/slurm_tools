@@ -126,7 +126,7 @@ def slurm_job(
             subprocess.run(
                 [
                     "sbatch",
-                    "--dependency=afterok:" + ":".join(map(str, dependencies)),
+                    "--dependency=afterany:" + ":".join(map(str, dependencies)),
                     output_path,
                 ]
             )
