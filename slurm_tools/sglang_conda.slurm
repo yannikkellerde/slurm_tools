@@ -36,7 +36,9 @@ sglang_cmd="python3 -m sglang.launch_server \
     --nccl-init-addr $HEAD_IPADDRESS:$PORT \
     --nnodes $NNODES \
     --node-rank \$SLURM_NODEID \
-    {capture_cuda}"
+    {capture_cuda} \
+    {chat_template_arg} \
+    {context_length_arg}"
 
 srun -o "{job_dir}/server.log.%j.%n" bash -c "$sglang_cmd" &
 

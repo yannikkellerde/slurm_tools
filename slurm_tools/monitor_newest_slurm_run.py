@@ -17,12 +17,14 @@ def main():
     parser.add_argument("--server_log", type=int, default=None)
     parser.add_argument("--gpu_log", type=int, default=None)
     parser.add_argument("--command_log", type=int, default=None)
+    parser.add_argument("--get_file", type=str, default=None)
     args = parser.parse_args()
 
     assert (
         sum(
             [
                 args.script,
+                args.get_file is not None,
                 args.server_log is not None,
                 args.gpu_log is not None,
                 args.command_log is not None,
@@ -32,6 +34,8 @@ def main():
     )
 
     def predicate(n):
+        if args.get_file:
+            return n == args.get_file
         if args.script:
             return n == "slurm_script.sh"
         if args.server_log is not None:

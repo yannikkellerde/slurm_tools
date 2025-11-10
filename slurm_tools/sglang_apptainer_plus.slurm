@@ -42,6 +42,7 @@ apptainer_cmd="apptainer exec \
     --env HF_HOME=/root/.cache/huggingface \
     --env HF_HUB_OFFLINE=1 \
     --env TOKENIZERS_PARALLELISM=false \
+    {env_file_arg} \
     --no-home \
     --nv \
     $SIF"
@@ -59,8 +60,9 @@ sglang_cmd="python3 -m sglang.launch_server \
     --nnodes $NNODES \
     --node-rank \$SLURM_NODEID \
     --host 0.0.0.0 \
-    {additional_sglang_args} \
-    {capture_cuda}"
+    {chat_template_arg} \
+    {capture_cuda} \
+    {context_length_arg}"
         
 srun -o "{job_dir}/server.log.%j.%n" bash -c "
 echo \$SLURM_NODEID >> {job_dir}/nodeid
@@ -71,5 +73,7 @@ else
     {conda_activate}
     apptainer exec -B /ptmp/$USER/.cache:/u/$USER/.cache -B /u/$USER/.triton:/u/$USER/.triton --no-home $SIF python3 -c \"from sglang.utils import wait_for_server; wait_for_server('http://$HEAD_NODE:30000')\"
     echo \"Server started. Sending the request ...\"
+    {source_env}
+    echo "REDIS_HOST: $REDIS_HOST"
     {command} $MODEL $HEAD_NODE
 fi"

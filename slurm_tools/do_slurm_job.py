@@ -31,6 +31,9 @@ def slurm_job(
     mem: str,
     dependencies: list[int],
     n_cpu: int,
+    extra_source: str,
+    extra_arg: str,
+    modules: str,
     **_kwargs,
 ):
     if n_gpu == 1 and n_nodes == 1:
@@ -38,22 +41,15 @@ def slurm_job(
             print(
                 "WARNING: You are using a single GPU and a single node, but are requesting a distributed launcher. This is likely a mistake."
             )
-            print("Switching launcher to python")
-            launcher = "python"
+            # print("Switching launcher to python")
+            # launcher = "python"
 
     if launcher == "accelerate":
         NUM_PROCESSES = n_nodes * n_gpu
 
-        # so processes know who to talk to
-        MASTER_ADDR = "$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)"
-        MASTER_PORT = 6000
-        distribute = f"""accelerate launch \
---config_file {acc_config} \
---main_process_ip {MASTER_ADDR} \
---main_process_port {MASTER_PORT} \
---machine_rank \$SLURM_PROCID \
---num_processes {NUM_PROCESSES} \
---num_machines {n_nodes}"""
+        acc_config_arg = f"--config_file {acc_config}" if acc_config else ""
+        distribute = f"accelerate launch {acc_config_arg} --num_processes {NUM_PROCESSES} --num_cpu_threads_per_process 12"
+        print("distribute command", distribute)
     elif launcher == "torchrun":
         distribute = f"python -m torch.distributed.run --nnodes=$SLURM_NNODES --nproc-per-node={n_gpu} --rdzv-id=$SLURM_JOBID --rdzv-endpoint=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1) --rdzv-backend=c10d"
     else:
@@ -79,6 +75,9 @@ def slurm_job(
     if n_cpu == 0:
         n_cpu = max(1, n_gpu) * 18
 
+    if extra_arg:
+        extra_arg = f'--extra "{extra_arg}"'
+
     format_dict = dict(
         job_dir=job_specific_dir,
         job_id=job_id,
@@ -96,6 +95,10 @@ def slurm_job(
         afterwards=afterwards,
         cinit=cinit,
         mem=mem,
+        extra_source="" if extra_source is None else f"source {extra_source}",
+        modules=modules,
+        extra_arg=extra_arg,
+        slurm_tools_path=basedir,
     )
 
     if keepalive:
@@ -163,11 +166,12 @@ def obtain_parser():
         help="Apptainer image to use",
     )
     parser.add_argument("--launcher", type=str, default="python")
-    parser.add_argument(
-        "--acc_config", type=str, default="config/accelerate/acc_config_DDP.yml"
-    )
+    parser.add_argument("--acc_config", type=str, default=None)
     parser.add_argument("--n_nodes", type=int, default=1, help="Number of Nodes")
     parser.add_argument("--conda_env", type=str, default=None, help="Env to activate")
+    parser.add_argument(
+        "--extra_source", type=str, default=None, help="Extra source to activate"
+    )
     parser.add_argument(
         "--keepalive",
         type=int,
@@ -183,6 +187,13 @@ def obtain_parser():
         "--dependencies", type=int, nargs="+", help="List of dependent jobs."
     )
     parser.add_argument("--n_cpu", type=int, default=0, help="Number of CPUs to use.")
+    parser.add_argument(
+        "--extra_arg",
+        type=str,
+        default="",
+        help="Extra arguments to pass to the notify_slack.py script.",
+    )
+    parser.add_argument("--modules", type=str, default="", help="Modules to load.")
 
     return parser
 
@@ -195,3 +206,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+"""
+slurm_job --n_gpu 1 --time 02:00:00 --launcher accelerate --n_nodes 1 --program_call "sh_finetuning/__main__.py train_sft --config_path configs/training_arguments/sft.yml --model_name Qwen/Qwen2.5-3B" --mem 0 --conda_env deepspeed --project sh_finetuning --run_group deepspeed --template_file /u/ykeller/github_repos/slurm_tools/slurm_tools/run_slurm_dais_modules.sh --cinit /u/ykeller/.mamba_init --n_cpu 96 --modules "gcc/14 cuda/12.8" --extra_arg "The test job" --acc_config configs/accelerate/deepspeed.yml
+"""

@@ -51,7 +51,9 @@ sglang_cmd="python3 -m sglang.launch_server \
     --nnodes $NNODES \
     --node-rank \$SLURM_NODEID \
     --trust-remote-code \
-    {capture_cuda}"
+    {capture_cuda} \
+    {chat_template_arg} \
+    {context_length_arg}"
 
 srun -o "{job_dir}/server.log.%j.%n" bash -c "{basepath}/monitor_gpu.sh > {job_dir}/gpus_node\$SLURM_NODEID.log 2>&1 & $apptainer_cmd $sglang_cmd" &
 
@@ -63,4 +65,5 @@ apptainer exec $SIF python3 -c "from sglang.utils import wait_for_server; wait_f
 echo "########## Sending the request ... ##########"
 
 {conda_activate}
+{source_env}
 {command}
