@@ -2,6 +2,7 @@ import argparse
 import os
 import subprocess
 from datetime import datetime
+from slurm_tools.slurm_time_until_start import find_n_gpu, find_n_nodes
 
 basedir = os.path.dirname(os.path.abspath(__file__))
 
@@ -194,6 +195,11 @@ def obtain_parser():
         help="Extra arguments to pass to the notify_slack.py script.",
     )
     parser.add_argument("--modules", type=str, default="", help="Modules to load.")
+    parser.add_argument(
+        "--compute_time_to_start",
+        action="store_true",
+        help="Compute the time to start the job.",
+    )
 
     return parser
 
@@ -202,6 +208,12 @@ def main():
     parser = obtain_parser()
     args = parser.parse_args()
     slurm_job(**vars(args))
+    if args.compute_time_to_start:
+        if args.n_nodes == 1:
+            deadline = find_n_gpu(args.n_gpu)
+        else:
+            deadline = find_n_nodes(args.n_nodes)
+        print(f"Estimated time to start the job: {deadline}")
 
 
 if __name__ == "__main__":
