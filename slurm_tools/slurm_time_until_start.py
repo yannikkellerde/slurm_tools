@@ -76,8 +76,6 @@ def parse_slurm_time(s: str) -> int:
     else:
         # Standard D-HH:MM:SS or HH:MM:SS format
         result = d * 86400 + h * 3600 + mi * 60 + se
-
-    print(f"{s} -> {result}")
     return result
 
 
