@@ -51,17 +51,34 @@ def parse_slurm_time(s: str) -> int:
         return 0
     if s.upper() in {"UNLIMITED", "INFINITE", "N/A"}:
         return 10**12  # effectively infinite
+
+    # Count colons to disambiguate format
+    colon_count = s.count(":")
+
     m = _TIME_RE.match(s)
     if not m:
         # Some clusters show just '0:00' etc.; fall back robustly
         if s.isdigit():
             return int(s)
         return 0
+
     d = int(m.group("days") or 0)
     h = int(m.group("h") or 0)
     mi = int(m.group("m") or 0)
     se = int(m.group("s") or 0)
-    return d * 86400 + h * 3600 + mi * 60 + se
+
+    # If there's only one colon and no days, it's M:SS format (not H:MM)
+    if colon_count == 1 and d == 0:
+        # Reinterpret: h->minutes, m->seconds
+        minutes = h
+        seconds = mi
+        result = minutes * 60 + seconds
+    else:
+        # Standard D-HH:MM:SS or HH:MM:SS format
+        result = d * 86400 + h * 3600 + mi * 60 + se
+
+    print(f"{s} -> {result}")
+    return result
 
 
 def fmt_duration(seconds: int) -> str:
