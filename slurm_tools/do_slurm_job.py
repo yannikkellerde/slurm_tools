@@ -49,7 +49,18 @@ def slurm_job(
         NUM_PROCESSES = n_nodes * n_gpu
 
         acc_config_arg = f"--config_file {acc_config}" if acc_config else ""
-        distribute = f"accelerate launch {acc_config_arg} --num_processes {NUM_PROCESSES} --num_cpu_threads_per_process 12"
+        if n_nodes > 1:
+            distribute = (
+                f"accelerate launch {acc_config_arg} "
+                f"--num_processes {NUM_PROCESSES} "
+                f"--num_cpu_threads_per_process 12 "
+                f"--num_machines {n_nodes} "
+                f"--main_process_ip $MASTER_ADDR "
+                f"--main_process_port $MASTER_PORT "
+                f"--machine_rank \\$SLURM_PROCID"
+            )
+        else:
+            distribute = f"accelerate launch {acc_config_arg} --num_processes {NUM_PROCESSES} --num_cpu_threads_per_process 12"
         print("distribute command", distribute)
     elif launcher == "torchrun":
         distribute = f"python -m torch.distributed.run --nnodes=$SLURM_NNODES --nproc-per-node={n_gpu} --rdzv-id=$SLURM_JOBID --rdzv-endpoint=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1) --rdzv-backend=c10d"
@@ -151,7 +162,9 @@ def obtain_parser():
         help="Expected runtime in HH:MM:SS format.",
     )
     parser.add_argument(
-        "--template_file", type=str, default=os.path.join(basedir, "run_slurm_conda.sh")
+        "--template_file",
+        type=str,
+        default=os.path.join(basedir, "run_slurm_dais_modules.sh"),
     )
     parser.add_argument("--run_group", type=str, default="test_runs")
     parser.add_argument(
