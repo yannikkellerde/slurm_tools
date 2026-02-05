@@ -14,5 +14,6 @@
 # Wall clock limit (max is 24 hours):
 #SBATCH --time={time}
 
+source /u/ykeller/private/set_slack_env.sh
 python {slurm_tools_path}/notify_slack.py --n_gpu {n_gpu} --n_nodes {n_nodes} --jobid $SLURM_JOBID {extra_arg}
 srun sleep infinity

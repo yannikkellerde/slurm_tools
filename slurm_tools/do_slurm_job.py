@@ -35,8 +35,23 @@ def slurm_job(
     extra_source: str,
     extra_arg: str,
     modules: str,
+    extra: str,
+    extra2: str,
+    extra3: str,
+    gpu_type: str,
     **_kwargs,
 ):
+    program_file = (
+        program_call.split(" ")[1]
+        if program_call.startswith("python ")
+        else program_call.split(" ")[0]
+    )
+    if program_file.endswith(".py") or program_file.endswith(".sh"):
+        if not os.path.exists(program_file):
+            raise FileNotFoundError(
+                f"Program file {program_file} not found. You sure that you are in the correct directory?"
+            )
+
     if n_gpu == 1 and n_nodes == 1:
         if launcher in ["accelerate", "torchrun"]:
             print(
@@ -111,6 +126,10 @@ def slurm_job(
         modules=modules,
         extra_arg=extra_arg,
         slurm_tools_path=basedir,
+        extra=extra,
+        extra2=extra2,
+        extra3=extra3,
+        gpu_type=gpu_type,
     )
 
     if keepalive:
@@ -213,6 +232,16 @@ def obtain_parser():
         action="store_true",
         help="Compute the time to start the job.",
     )
+    parser.add_argument(
+        "--extra", type=str, default="", help="Extra arguments to pass to the job."
+    )
+    parser.add_argument(
+        "--extra2", type=str, default="", help="Extra arguments to pass to the job."
+    )
+    parser.add_argument(
+        "--extra3", type=str, default="", help="Extra arguments to pass to the job."
+    )
+    parser.add_argument("--gpu_type", type=str, default="h200", help="GPU type to use.")
 
     return parser
 

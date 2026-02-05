@@ -10,15 +10,17 @@
 #SBATCH --mem={mem}
 #
 #SBATCH --partition="gpu"
-#SBATCH --gres=gpu:h200:{n_gpu}
+#SBATCH --gres=gpu:{gpu_type}:{n_gpu}
 #
 # Wall clock limit (max is 24 hours):
 #SBATCH --time={time}
 
+echo $(date)
 source {cinit}
 source /u/ykeller/private/set_slack_env.sh
 mamba activate {conda_env}
 module load {modules}
+source /u/ykeller/private/set_cuda_env.sh
 
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 export MASTER_PORT=29500

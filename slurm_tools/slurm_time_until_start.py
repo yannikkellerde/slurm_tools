@@ -209,20 +209,23 @@ def _parse_gpu_total_from_gres(gres: str) -> int:
 
 def read_nodes(
     partition: str | None, exclude: Iterable[str]
-) -> Tuple[Dict[str, int], Dict[str, str]]:
-    """Return (node_total_gpus, node_partition) for nodes in sinfo (per-node view).
+) -> Tuple[Dict[str, int], Dict[str, str], Dict[str, str]]:
+    """Return (node_total_gpus, node_partition, node_state) for nodes in sinfo (per-node view).
     If partition is set, only include nodes in that partition.
     Falls back to `scontrol show node` if %G does not expose GPUs.
     """
-    cmd = ["sinfo", "-h", "-N", "-o", "%N|%G|%P"]
+    cmd = ["sinfo", "-h", "-N", "-o", "%N|%G|%P|%t"]
     out = run(cmd)
     totals: Dict[str, int] = {}
     parts: Dict[str, str] = {}
+    states: Dict[str, str] = {}
     exclude_set = set(exclude)
 
     lines = [ln for ln in out.strip().splitlines() if ln.strip()]
     for line in lines:
-        name, gres, part = (x.strip() for x in line.split("|"))
+        name, gres, part, state = (x.strip() for x in line.split("|"))
+        if state not in {"mix", "mix-", "alloc", "alloc-", "idle", "idle-"}:
+            continue
         if name in exclude_set:
             continue
         # Keep only nodes in requested partition if provided. sinfo may list multiple partitions as partA* or partA,partB
@@ -251,14 +254,19 @@ def read_nodes(
                 pass
         totals[name] = total_gpu
         parts[name] = part
-    return totals, parts
+        # Normalize state (remove trailing '-' which indicates powering up/down)
+        states[name] = state.rstrip("-")
+    return totals, parts, states
 
 
 # ---------- Core logic ----------
 
 
 def earliest_time_for_nodes(
-    n_needed: int, jobs: List[Job], node_totals: Dict[str, int]
+    n_needed: int,
+    jobs: List[Job],
+    node_totals: Dict[str, int],
+    node_states: Dict[str, str],
 ) -> Tuple[int, List[Tuple[str, int]]]:
     """Return (seconds, details), where details lists (node, free_in_seconds).
     A node is free when all jobs on it have finished.
@@ -269,11 +277,32 @@ def earliest_time_for_nodes(
         for n in j.nodes:
             if n in by_node:
                 by_node[n].append(j.remaining_s)
-    free_now = [n for n, lst in by_node.items() if len(lst) == 0]
+
+    # Trust the node state from sinfo:
+    # - 'alloc' means node is fully allocated (even if we don't see jobs)
+    # - 'idle' means node is completely free
+    # - 'mix' means partial allocation
+    free_now = []
+    occupied = []
+    for n, lst in by_node.items():
+        state = node_states.get(n, "alloc")
+        if state == "idle":
+            # Node is idle according to SLURM - it's free now
+            free_now.append(n)
+        elif state == "alloc" and len(lst) == 0:
+            # Node is allocated but we don't see jobs - assume it's occupied with unknown end time
+            # Use a large but not infinite time (24 hours) as a fallback
+            occupied.append((n, 86400))
+        elif len(lst) == 0:
+            # mix state with no visible jobs - treat as free
+            free_now.append(n)
+        else:
+            # We have job info - use it
+            occupied.append((n, max(lst)))
+
     if len(free_now) >= n_needed:
         return 0, [(n, 0) for n in free_now[:n_needed]]
-    # For occupied nodes, free time is max remaining among jobs on it
-    occupied = [(n, max(lst)) for n, lst in by_node.items() if lst]
+
     occupied.sort(key=lambda x: x[1])
     k = n_needed - len(free_now)
     if k <= 0:
@@ -287,7 +316,10 @@ def earliest_time_for_nodes(
 
 
 def earliest_time_for_gpus(
-    g_needed: int, jobs: List[Job], node_totals: Dict[str, int]
+    g_needed: int,
+    jobs: List[Job],
+    node_totals: Dict[str, int],
+    node_states: Dict[str, str],
 ) -> Tuple[int, Dict[str, List[Tuple[int, int]]]]:
     """Return (seconds, details) for the earliest time when *a single node* has at least g_needed GPUs free.
     details per node is list of (t_free, gpus_free_increment) for transparency.
@@ -303,6 +335,20 @@ def earliest_time_for_gpus(
             used[n] += j.gpus_per_node
             if j.gpus_per_node > 0:
                 events_by_node[n].append((j.remaining_s, j.gpus_per_node))
+
+    # Trust the node state from sinfo:
+    # - 'alloc' means ALL resources are allocated (even if we don't see the jobs)
+    # - 'idle' means NO resources are allocated
+    # - 'mix' means partial allocation (use job-based calculation)
+    for n, total in node_totals.items():
+        state = node_states.get(n, "alloc")
+        if state == "alloc":
+            # Node is fully allocated - if we didn't see enough jobs, assume all GPUs are used
+            if used[n] < total:
+                used[n] = total
+        elif state == "idle":
+            # Node is idle - no GPUs are used
+            used[n] = 0
 
     # Check immediate availability per node
     for n, total in node_totals.items():
@@ -330,7 +376,7 @@ def earliest_time_for_gpus(
 
 
 def find_n_gpu(n_gpu: int):
-    node_totals, _ = read_nodes(None, [])
+    node_totals, _, node_states = read_nodes(None, [])
     if not node_totals:
         print("No nodes found (check --partition).")
         sys.exit(3)
@@ -342,7 +388,7 @@ def find_n_gpu(n_gpu: int):
             f"❌ Request exceeds maximum GPUs on any single node (requested {n_gpu}, max per node {max_per_node})."
         )
         sys.exit(1)
-    deadline, events = earliest_time_for_gpus(n_gpu, jobs, node_totals)
+    deadline, events = earliest_time_for_gpus(n_gpu, jobs, node_totals, node_states)
     if deadline == 0:
         print(f"✅ {n_gpu} GPU(s) are available now on at least one node.")
         sys.exit(0)
@@ -373,13 +419,13 @@ def find_n_gpu(n_gpu: int):
 
 
 def find_n_nodes(n_nodes: int):
-    node_totals, _ = read_nodes(None, [])
+    node_totals, _, node_states = read_nodes(None, [])
     if not node_totals:
         print("No nodes found (check --partition).")
         sys.exit(3)
 
     jobs = read_jobs(consider_cg=False)
-    deadline, details = earliest_time_for_nodes(n_nodes, jobs, node_totals)
+    deadline, details = earliest_time_for_nodes(n_nodes, jobs, node_totals, node_states)
     if deadline == 0:
         print(f"✅ {n_nodes} node(s) are available now.")
         sys.exit(0)
@@ -407,18 +453,11 @@ def main():
 
     args = ap.parse_args()
 
-    node_totals, _ = read_nodes(None, [])
-    if not node_totals:
-        print("No nodes found (check --partition).")
-        sys.exit(3)
-
-    jobs = read_jobs(consider_cg=False)
-
     if args.n_nodes is not None:
-        deadline = find_n_nodes(args.n_nodes)
+        find_n_nodes(args.n_nodes)
 
     if args.n_gpu is not None:
-        deadline = find_n_gpu(args.n_gpu)
+        find_n_gpu(args.n_gpu)
 
 
 if __name__ == "__main__":
