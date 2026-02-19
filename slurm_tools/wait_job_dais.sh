@@ -9,7 +9,7 @@
 #SBATCH --mem={mem}
 #
 #SBATCH --partition="gpu"
-#SBATCH --gres=gpu:h200:{n_gpu}
+#SBATCH --gres=gpu:{gpu_type}:{n_gpu}
 #
 # Wall clock limit (max is 24 hours):
 #SBATCH --time={time}
