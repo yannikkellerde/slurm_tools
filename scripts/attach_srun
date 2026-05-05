@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# If set to 1, only consider RUNNING jobs (ST == R)
+ONLY_RUNNING="${ONLY_RUNNING:-1}"
+
+# Optional: override shell to run inside allocation
+SHELL_CMD="${SHELL_CMD:-zsh}"
+
+# Convert SLURM TIME format to seconds.
+# Accepts: MM:SS | HH:MM:SS | DD-HH:MM:SS
+to_seconds() {
+  local t="$1"
+  local days=0 hours=0 mins=0 secs=0
+  local left right
+
+  if [[ "$t" == *-* ]]; then
+    left="${t%-*}"   # days
+    right="${t#*-}"  # HH:MM:SS
+    days="$left"
+    t="$right"
+  fi
+
+  # Split by :
+  IFS=: read -r a b c <<<"$t"
+
+  if [[ -n "${c:-}" ]]; then
+    # HH:MM:SS
+    hours="$a"
+    mins="$b"
+    secs="$c"
+  else
+    # MM:SS
+    mins="$a"
+    secs="$b"
+  fi
+
+  # force base-10 to avoid leading-zero octal weirdness
+  echo $((10#${days}*86400 + 10#${hours}*3600 + 10#${mins}*60 + 10#${secs}))
+}
+
+# Get squeue output (no headers) with stable columns, easier than parsing the pretty table.
+# If you *must* parse the default table, it's possible, but --format is much safer.
+# Fields: JOBID|STATE|TIME
+mapfile -t jobs < <(squeue --me --noheader --format="%i|%t|%M")
+
+if ((${#jobs[@]} == 0)); then
+  echo "No jobs found for current user." >&2
+  exit 1
+fi
+
+best_jobid=""
+best_secs=""
+
+for line in "${jobs[@]}"; do
+  IFS='|' read -r jobid st time_str <<<"$line"
+
+  if [[ "$ONLY_RUNNING" == "1" && "$st" != "R" ]]; then
+    continue
+  fi
+
+  secs="$(to_seconds "$time_str")"
+
+  if [[ -z "$best_jobid" || "$secs" -lt "$best_secs" ]]; then
+    best_jobid="$jobid"
+    best_secs="$secs"
+  fi
+done
+
+if [[ -z "$best_jobid" ]]; then
+  echo "No matching jobs found (ONLY_RUNNING=$ONLY_RUNNING)." >&2
+  exit 1
+fi
+
+echo "Attaching to job $best_jobid (elapsed ${best_secs}s) ..."
+exec srun --pty --overlap --jobid "$best_jobid" "$SHELL_CMD"

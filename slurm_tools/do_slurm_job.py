@@ -39,6 +39,10 @@ def slurm_job(
     extra2: str,
     extra3: str,
     gpu_type: str,
+    n_array_jobs: int,
+    account: str,
+    qos: str,
+    partition: str,
     **_kwargs,
 ):
     program_file = (
@@ -91,11 +95,7 @@ def slurm_job(
         print("No need to include the launcher (python) in the program call.")
         program_call = program_call.removeprefix("python ")
     job_id = generate_local_job_id()
-    dest_dir = (
-        "/root/runs"
-        if "apptainer" in template_file
-        else os.path.join(os.environ["HOME"], "runs")
-    )
+    dest_dir = os.path.join(os.environ["HOME"], "runs")
     job_specific_dir = os.path.join(dest_dir, run_group, job_id)
     os.makedirs(job_specific_dir, exist_ok=True)
 
@@ -104,6 +104,9 @@ def slurm_job(
 
     if extra_arg:
         extra_arg = f'--extra "{extra_arg}"'
+
+    if gpu_type and not gpu_type.endswith(":"):
+        gpu_type = f"{gpu_type}:"
 
     format_dict = dict(
         job_dir=job_specific_dir,
@@ -130,6 +133,10 @@ def slurm_job(
         extra2=extra2,
         extra3=extra3,
         gpu_type=gpu_type,
+        n_array_jobs=n_array_jobs,
+        account=account,
+        qos=qos,
+        partition=partition,
     )
 
     if keepalive:
@@ -233,6 +240,12 @@ def obtain_parser():
         help="Compute the time to start the job.",
     )
     parser.add_argument(
+        "--n_array_jobs",
+        type=int,
+        default=1,
+        help="Number of array jobs. Only used for job arrays.",
+    )
+    parser.add_argument(
         "--extra", type=str, default="", help="Extra arguments to pass to the job."
     )
     parser.add_argument(
@@ -241,7 +254,16 @@ def obtain_parser():
     parser.add_argument(
         "--extra3", type=str, default="", help="Extra arguments to pass to the job."
     )
-    parser.add_argument("--gpu_type", type=str, default="h200", help="GPU type to use.")
+    parser.add_argument("--gpu_type", type=str, default="", help="GPU type to use.")
+    parser.add_argument(
+        "--account", type=str, default="", help="SLURM account (e.g. ehpc665)."
+    )
+    parser.add_argument(
+        "--qos", type=str, default="", help="SLURM QoS (e.g. acc_ehpc)."
+    )
+    parser.add_argument(
+        "--partition", type=str, default="", help="SLURM partition (e.g. acc)."
+    )
 
     return parser
 
