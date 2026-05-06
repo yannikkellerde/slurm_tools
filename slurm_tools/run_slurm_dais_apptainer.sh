@@ -40,6 +40,7 @@ srun bash -c "apptainer exec \
     --bind /dais/fs/scratch/ykeller/container_outputs:/opt/outputs \
     --bind /u/ykeller/data/social_deduction:/opt/data/social_deduction \
     --bind /dais/fs/scratch/ykeller/models/social_deduction:/opt/models \
+    --bind /u/ykeller/models_permanent/social_deduction:/opt/models_ro:ro \
     --bind /dais/fs/scratch/ykeller/cluster_transfer:/opt/cluster_transfer \
     --bind \$CCACHE:\$CCACHE \
     --bind \$HF_HOST:/opt/huggingface \
@@ -69,6 +70,7 @@ srun bash -c "apptainer exec \
     --env SLURM_LOCALID=\$SLURM_LOCALID \
     --env SLURM_NNODES=\$SLURM_NNODES \
     --env SLURM_JOBID=\$SLURM_JOBID \
+    --env-file /u/ykeller/private/cc_secrets \
     --pwd /opt/sh_finetuning \
     {image} \
     bash -c \"\$CMD\""
