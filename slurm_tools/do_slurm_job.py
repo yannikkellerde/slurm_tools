@@ -2,7 +2,9 @@ import argparse
 import os
 import subprocess
 from datetime import datetime
+
 from slurm_tools.slurm_time_until_start import find_n_gpu, find_n_nodes
+from slurm_tools.vllm_setup import build_vllm_setup
 
 basedir = os.path.dirname(os.path.abspath(__file__))
 
@@ -20,6 +22,7 @@ def slurm_job(
     template_file: str,
     run_group: str,
     program_call: str,
+    skip_program_file_check: bool,
     image: str,
     launcher: str,
     acc_config: str,
@@ -43,6 +46,8 @@ def slurm_job(
     account: str,
     qos: str,
     partition: str,
+    vllm_servers_json: str,
+    cc_project: str,
     **_kwargs,
 ):
     program_file = (
@@ -50,7 +55,9 @@ def slurm_job(
         if program_call.startswith("python ")
         else program_call.split(" ")[0]
     )
-    if program_file.endswith(".py") or program_file.endswith(".sh"):
+    if not skip_program_file_check and (
+        program_file.endswith(".py") or program_file.endswith(".sh")
+    ):
         if not os.path.exists(program_file):
             raise FileNotFoundError(
                 f"Program file {program_file} not found. You sure that you are in the correct directory?"
@@ -108,6 +115,17 @@ def slurm_job(
     if gpu_type and not gpu_type.endswith(":"):
         gpu_type = f"{gpu_type}:"
 
+    vllm_setup, main_cuda_visible_devices = build_vllm_setup(
+        vllm_servers_json=vllm_servers_json,
+        job_dir=job_specific_dir,
+        n_gpu=n_gpu,
+        cc_project=cc_project,
+    )
+    if main_cuda_visible_devices:
+        main_cuda_prefix = f"CUDA_VISIBLE_DEVICES={main_cuda_visible_devices} "
+    else:
+        main_cuda_prefix = ""
+
     format_dict = dict(
         job_dir=job_specific_dir,
         job_id=job_id,
@@ -137,6 +155,8 @@ def slurm_job(
         account=account,
         qos=qos,
         partition=partition,
+        vllm_setup=vllm_setup,
+        main_cuda_prefix=main_cuda_prefix,
     )
 
     if keepalive:
@@ -198,6 +218,11 @@ def obtain_parser():
         type=str,
         required=True,
         help="Script to run.",
+    )
+    parser.add_argument(
+        "--skip_program_file_check",
+        action="store_true",
+        help="Skip checking that the local program file exists before submitting.",
     )
     parser.add_argument(
         "--image",
@@ -263,6 +288,18 @@ def obtain_parser():
     )
     parser.add_argument(
         "--partition", type=str, default="", help="SLURM partition (e.g. acc)."
+    )
+    parser.add_argument(
+        "--vllm_servers_json",
+        type=str,
+        default="",
+        help="JSON list of validated vLLM sidecar server configs.",
+    )
+    parser.add_argument(
+        "--cc_project",
+        type=str,
+        default="social_deduction",
+        help="CC project name used to select vLLM bind mounts.",
     )
 
     return parser

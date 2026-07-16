@@ -39,16 +39,16 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --nv \
     --bind /dais/fs/scratch/ykeller/tmp:/tmp \
     --bind /dais/fs/scratch/ykeller/container_outputs:/opt/outputs \
-    --bind /u/ykeller/data/social_deduction:/opt/data/social_deduction \
-    --bind /dais/fs/scratch/ykeller/models/social_deduction:/opt/models \
-    --bind /u/ykeller/models_permanent/social_deduction:/opt/models_ro:ro \
+    --bind /u/ykeller/data/coopbot:/opt/data/coopbot \
+    --bind /dais/fs/scratch/ykeller/models/coopbot:/opt/models \
+    --bind /u/ykeller/models_permanent/coopbot:/opt/models_ro:ro \
     --bind /dais/fs/scratch/ykeller/cluster_transfer:/opt/cluster_transfer \
     --bind \$CCACHE:\$CCACHE \
     --bind \$HF_HOST:/opt/huggingface \
-    --bind /u/ykeller/github_repos/social_deduction_llm:/opt/sh_finetuning \
+    --bind /u/ykeller/github_repos/llm-strategic-tuning:/opt/llm-strategic-tuning \
     --bind /u/ykeller/runs:/opt/runs:ro \
     --home /dais/fs/scratch/ykeller/apptainer-home:/home/\$USER \
-    --env PYTHONPATH=/opt/sh_finetuning \
+    --env PYTHONPATH=/opt/llm-strategic-tuning \
     --env TRITON_CACHE_DIR=\$CCACHE/triton \
     --env TORCH_EXTENSIONS_DIR=\$CCACHE/torch_ext \
     --env HF_HOME=/opt/huggingface \
@@ -72,6 +72,6 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --env SLURM_NNODES=\$SLURM_NNODES \
     --env SLURM_JOBID=\$SLURM_JOBID \
     --env-file /u/ykeller/private/cc_secrets \
-    --pwd /opt/sh_finetuning \
+    --pwd /opt/llm-strategic-tuning \
     {image} \
     bash -c \"\$CMD\""
