@@ -111,6 +111,8 @@ def build_vllm_setup(
         data_parallel_size = int(server["data_parallel_size"])
         enforce_eager = bool(server["enforce_eager"])
         enable_prefix_caching = bool(server["enable_prefix_caching"])
+        max_model_length = int(server.get("max_model_length", 16192))
+        reasoning_parser = server.get("reasoning_parser")
 
         for gpu_id in gpu_ids:
             used_gpus.add(int(gpu_id))
@@ -133,7 +135,7 @@ def build_vllm_setup(
             "--dtype",
             "bfloat16",
             "--max-model-len",
-            "16192",
+            str(max_model_length),
             "--uvicorn-log-level",
             "warning",
         ]
@@ -141,6 +143,8 @@ def build_vllm_setup(
             vllm_args.append("--enforce-eager")
         if enable_prefix_caching:
             vllm_args.append("--enable-prefix-caching")
+        if reasoning_parser:
+            vllm_args.extend(["--reasoning-parser", shlex.quote(reasoning_parser)])
 
         lines.extend(
             [
