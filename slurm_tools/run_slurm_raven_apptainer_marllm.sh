@@ -4,6 +4,7 @@
 #SBATCH --chdir ./
 #SBATCH --job-name {experiment_name}_{job_id}
 #SBATCH --nodes={n_nodes}
+#SBATCH --partition=gpu
 #
 #SBATCH --cpus-per-task={n_cpu}
 #SBATCH --mem={mem}
@@ -31,19 +32,23 @@ echo "CMD: $CMD"
 {vllm_setup}
 srun bash -c "{main_cuda_prefix}apptainer exec \
     --containall \
-    --no-mount cwd,tmp,sys,bind-paths \
+    --no-mount cwd,tmp,bind-paths \
     --cleanenv \
     --writable-tmpfs \
     --nv \
     --bind /ptmp/ykeller/cc/tmp:/tmp \
     --bind /ptmp/ykeller/cc/container_outputs:/opt/outputs \
     --bind /ptmp/ykeller/cc/cluster_transfer:/opt/cluster_transfer \
+    --bind /ptmp/ykeller/cc/data:/opt/data \
     --bind \$CCACHE:\$CCACHE \
     --bind \$HF_HOST:/opt/huggingface \
-    --bind /u/ykeller/github_repos/marllm:/opt/marllm \
-    --bind /u/ykeller/runs:/opt/runs:ro \
+    --bind /u/ykeller/MARL-LM:/opt/MARL-LM \
+    --bind /u/ykeller/social_deduction_llm:/opt/sh_finetuning \
+    --bind /u/ykeller/runs:/opt/MARL-LM/runs \
+    --bind /u/ykeller/runs:/opt/runs \
+    --bind /dev/infiniband:/dev/infiniband \
     --home /ptmp/ykeller/cc/apptainer-home:/home/\$USER \
-    --env PYTHONPATH=/opt/marllm \
+    --env PYTHONPATH=/opt/MARL-LM \
     --env TRITON_CACHE_DIR=\$CCACHE/triton \
     --env TORCH_EXTENSIONS_DIR=\$CCACHE/torch_ext \
     --env HF_HOME=/opt/huggingface \
@@ -66,7 +71,8 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --env SLURM_LOCALID=\$SLURM_LOCALID \
     --env SLURM_NNODES=\$SLURM_NNODES \
     --env SLURM_JOBID=\$SLURM_JOBID \
+    --env CUDA_VISIBLE_DEVICES={cuda_visible_devices} \
     --env-file /u/ykeller/private/cc_secrets \
-    --pwd /opt/marllm \
+    --pwd /opt/MARL-LM \
     {image} \
     bash -c \"\$CMD\""

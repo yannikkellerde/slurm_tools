@@ -33,10 +33,11 @@ echo "CMD: $CMD"
 {vllm_setup}
 srun bash -c "{main_cuda_prefix}apptainer exec \
     --containall \
-    --no-mount cwd,tmp,sys,bind-paths \
+    --no-mount cwd,tmp,bind-paths \
     --cleanenv \
     --writable-tmpfs \
     --nv \
+    --bind /dev/infiniband:/dev/infiniband \
     --bind /dais/fs/scratch/ykeller/tmp:/tmp \
     --bind /dais/fs/scratch/ykeller/container_outputs:/opt/outputs \
     --bind /u/ykeller/data/social_deduction:/opt/data/social_deduction \
@@ -71,6 +72,7 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --env SLURM_LOCALID=\$SLURM_LOCALID \
     --env SLURM_NNODES=\$SLURM_NNODES \
     --env SLURM_JOBID=\$SLURM_JOBID \
+    --env CUDA_VISIBLE_DEVICES={cuda_visible_devices} \
     --env-file /u/ykeller/private/cc_secrets \
     --pwd /opt/sh_finetuning \
     {image} \

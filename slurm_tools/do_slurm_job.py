@@ -48,6 +48,8 @@ def slurm_job(
     partition: str,
     vllm_servers_json: str,
     cc_project: str,
+    reservation: str,
+    cluster: str = "",
     **_kwargs,
 ):
     program_file = (
@@ -115,14 +117,18 @@ def slurm_job(
     if gpu_type and not gpu_type.endswith(":"):
         gpu_type = f"{gpu_type}:"
 
-    vllm_setup, main_cuda_visible_devices = build_vllm_setup(
+    vllm_setup, cuda_visible_devices = build_vllm_setup(
         vllm_servers_json=vllm_servers_json,
         job_dir=job_specific_dir,
         n_gpu=n_gpu,
         cc_project=cc_project,
+        cluster=cluster,
     )
-    if main_cuda_visible_devices:
-        main_cuda_prefix = f"CUDA_VISIBLE_DEVICES={main_cuda_visible_devices} "
+    # Host-side prefix for templates that do not pass CUDA_VISIBLE_DEVICES via
+    # --env (and as a belt-and-suspenders for apptainer --nv device selection).
+    # Apptainer templates with --cleanenv must also use {cuda_visible_devices}.
+    if cuda_visible_devices:
+        main_cuda_prefix = f"CUDA_VISIBLE_DEVICES={cuda_visible_devices} "
     else:
         main_cuda_prefix = ""
 
@@ -157,6 +163,7 @@ def slurm_job(
         partition=partition,
         vllm_setup=vllm_setup,
         main_cuda_prefix=main_cuda_prefix,
+        cuda_visible_devices=cuda_visible_devices,
     )
 
     if keepalive:
@@ -183,16 +190,15 @@ def slurm_job(
         file.write(script)
 
     if not dry:
+        sbatch_cmd = ["sbatch"]
+        if reservation:
+            sbatch_cmd.append(f"--reservation={reservation}")
         if dependencies:
-            subprocess.run(
-                [
-                    "sbatch",
-                    "--dependency=afterany:" + ":".join(map(str, dependencies)),
-                    output_path,
-                ]
+            sbatch_cmd.append(
+                "--dependency=afterany:" + ":".join(map(str, dependencies))
             )
-        else:
-            subprocess.run(["sbatch", output_path])
+        sbatch_cmd.append(output_path)
+        subprocess.run(sbatch_cmd)
 
 
 def obtain_parser():
@@ -290,6 +296,12 @@ def obtain_parser():
         "--partition", type=str, default="", help="SLURM partition (e.g. acc)."
     )
     parser.add_argument(
+        "--reservation",
+        type=str,
+        default="",
+        help="SLURM reservation name to pass to sbatch as --reservation.",
+    )
+    parser.add_argument(
         "--vllm_servers_json",
         type=str,
         default="",
@@ -300,6 +312,15 @@ def obtain_parser():
         type=str,
         default="social_deduction",
         help="CC project name used to select vLLM bind mounts.",
+    )
+    parser.add_argument(
+        "--cluster",
+        type=str,
+        default="",
+        help=(
+            "Cluster name for vLLM sidecar image/binds (dais or raven). "
+            "Omit to infer from --cc_project (MARLLM→raven, else dais)."
+        ),
     )
 
     return parser

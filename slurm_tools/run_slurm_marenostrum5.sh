@@ -59,6 +59,7 @@ srun bash -c "singularity exec \
     --env SLURM_LOCALID=\$SLURM_LOCALID \
     --env SLURM_NNODES=\$SLURM_NNODES \
     --env SLURM_JOBID=\$SLURM_JOBID \
+    --env CUDA_VISIBLE_DEVICES={cuda_visible_devices} \
     --pwd /opt/sh_finetuning \
     {image} \
     bash -c \"\$CMD\""
