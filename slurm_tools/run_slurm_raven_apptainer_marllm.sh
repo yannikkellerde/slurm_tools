@@ -32,6 +32,12 @@ echo "SLURM_NNODES=$SLURM_NNODES  SLURM_JOB_NODELIST=$SLURM_JOB_NODELIST"
 echo "CMD: $CMD"
 
 {vllm_setup}
+if [ -f "{secrets_file}" ]; then
+  CC_SECRETS_ARG="--env-file {secrets_file}"
+else
+  echo "warning: Raven secrets file {secrets_file} does not exist; continuing without --env-file" >&2
+  CC_SECRETS_ARG=
+fi
 srun bash -c "{main_cuda_prefix}apptainer exec \
     --containall \
     --no-mount cwd,tmp,bind-paths \
@@ -77,7 +83,7 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --env SLURM_NNODES=\$SLURM_NNODES \
     --env SLURM_JOBID=\$SLURM_JOBID \
     --env CUDA_VISIBLE_DEVICES={cuda_visible_devices} \
-    --env-file {secrets_file} \
+    $CC_SECRETS_ARG \
     --pwd /opt/MARL-LM \
     {image} \
     bash -c \"\$CMD\""
