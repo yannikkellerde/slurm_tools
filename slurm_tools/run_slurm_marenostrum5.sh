@@ -46,7 +46,7 @@ srun bash -c "singularity exec \
     --env HF_HOME=\$CCACHE/hf \
     --env FLASHINFER_WORKSPACE_BASE=\$CCACHE/flashinfer \
     --env WANDB_DIR=\$CCACHE/wandb \
-    --env WANDB_MODE=offline \
+    --env WANDB_MODE={wandb_mode} \
     --env WANDB_ENTITY=chm-hci \
     --env WANDB_PROJECT={project_name} \
     --env WANDB_RUN_GROUP={experiment_name} \

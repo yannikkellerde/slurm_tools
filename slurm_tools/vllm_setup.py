@@ -5,12 +5,18 @@ import os
 import shlex
 from typing import List, Tuple
 
+from slurm_tools.cluster_layout import layout_for_cluster
+
+# Shared images. The submitting account's scratch and home come from
+# cluster_layout, so another user can run these sidecars against images
+# the image owner has shared.
+_SIF_OWNER = "ykeller"
 _DAIS_VLLM_IMAGE = (
-    "/dais/fs/scratch/ykeller/containers/apptainer/vllm-openai_latest.sif"
+    f"/dais/fs/scratch/{_SIF_OWNER}/containers/apptainer/vllm-openai_latest.sif"
 )
-_DAIS_VLLM_LOG_ROOT = "/dais/fs/scratch/ykeller/tmp/vllm_logs"
-_RAVEN_VLLM_IMAGE = "/raven/ptmp/ykeller/cc/containers/apptainer/vllm-openai_latest.sif"
-_RAVEN_VLLM_LOG_ROOT = "/ptmp/ykeller/cc/tmp/vllm_logs"
+_RAVEN_VLLM_IMAGE = (
+    f"/raven/ptmp/{_SIF_OWNER}/cc/containers/apptainer/vllm-openai_latest.sif"
+)
 _ARRHENIUS_PERSONAL = "/nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik"
 _ARRHENIUS_VLLM_IMAGE = (
     f"{_ARRHENIUS_PERSONAL}/containers/apptainer/vllm-openai_latest.sif"
@@ -19,7 +25,23 @@ _ARRHENIUS_VLLM_LOG_ROOT = f"{_ARRHENIUS_PERSONAL}/cc/tmp/vllm_logs"
 
 # Backwards-compatible aliases used by existing tests.
 VLLM_IMAGE = _DAIS_VLLM_IMAGE
-VLLM_LOG_ROOT = _DAIS_VLLM_LOG_ROOT
+
+
+def _dais_vllm_log_root() -> str:
+    return f"{layout_for_cluster('dais')['scratch']}/tmp/vllm_logs"
+
+
+def _raven_vllm_log_root() -> str:
+    return f"{layout_for_cluster('raven')['scratch']}/tmp/vllm_logs"
+
+
+VLLM_LOG_ROOT = _dais_vllm_log_root()
+
+# Sidecars pass --contain and no --home, so ~ inside the container is $HOME.
+def _dais_ssh_bind() -> str:
+    home = layout_for_cluster("dais")["home"]
+    return f"--bind {home}/private/cc_ssh_mount:$HOME/.ssh "
+
 
 # Match the HuggingFace bind + env wiring from run_slurm_*_apptainer*.sh so
 # vLLM resolves the same cached models as the main locked-down container.
@@ -32,57 +54,62 @@ _HF_BINDS_AND_ENVS = (
     "--env HF_DATASETS_CACHE=/opt/huggingface/datasets "
 )
 
-_SOCIAL_DEDUCTION_BINDS = (
-    "--bind /dev/infiniband:/dev/infiniband "
-    "--bind /dais:/dais "
-    "--bind /dais/fs/scratch/ykeller/tmp:/tmp "
-    "--bind $CCACHE:$CCACHE "
-    "--bind /dais/fs/scratch/ykeller/models/social_deduction:/opt/models "
-    "--bind /u/ykeller/models_permanent/social_deduction:/opt/models_ro:ro "
-    + _HF_BINDS_AND_ENVS
-    + "--env TMPDIR=/tmp "
-    "--env TRITON_CACHE_DIR=$CCACHE/triton "
-    "--env TORCH_EXTENSIONS_DIR=$CCACHE/torch_ext "
-    "--env FLASHINFER_WORKSPACE_BASE=$CCACHE/flashinfer "
-    "--env VLLM_NO_USAGE_STATS=1 "
-)
+def _cache_tail() -> str:
+    return (
+        "--env TMPDIR=/tmp "
+        "--env TRITON_CACHE_DIR=$CCACHE/triton "
+        "--env TORCH_EXTENSIONS_DIR=$CCACHE/torch_ext "
+        "--env FLASHINFER_WORKSPACE_BASE=$CCACHE/flashinfer "
+        "--env VLLM_NO_USAGE_STATS=1 "
+    )
 
-_COOPBOT_BINDS = (
-    "--bind /dev/infiniband:/dev/infiniband "
-    "--bind /dais:/dais "
-    "--bind /dais/fs/scratch/ykeller/tmp:/tmp "
-    "--bind $CCACHE:$CCACHE "
-    "--bind /dais/fs/scratch/ykeller/models/coopbot:/opt/models "
-    "--bind /u/ykeller/models_permanent/coopbot:/opt/models_ro:ro "
-    + _HF_BINDS_AND_ENVS
-    + "--env TMPDIR=/tmp "
-    "--env TRITON_CACHE_DIR=$CCACHE/triton "
-    "--env TORCH_EXTENSIONS_DIR=$CCACHE/torch_ext "
-    "--env FLASHINFER_WORKSPACE_BASE=$CCACHE/flashinfer "
-    "--env VLLM_NO_USAGE_STATS=1 "
-)
 
-# silicon_sampling has no project-specific model trees; HF cache + generic
-# DAIS scratch binds are enough for vLLM sidecars.
-_SILICON_SAMPLING_BINDS = (
-    "--bind /dev/infiniband:/dev/infiniband "
-    "--bind /dais:/dais "
-    "--bind /dais/fs/scratch/ykeller/tmp:/tmp "
-    "--bind $CCACHE:$CCACHE " + _HF_BINDS_AND_ENVS + "--env TMPDIR=/tmp "
-    "--env TRITON_CACHE_DIR=$CCACHE/triton "
-    "--env TORCH_EXTENSIONS_DIR=$CCACHE/torch_ext "
-    "--env FLASHINFER_WORKSPACE_BASE=$CCACHE/flashinfer "
-    "--env VLLM_NO_USAGE_STATS=1 "
-)
+def _social_deduction_binds() -> str:
+    lay = layout_for_cluster("dais")
+    scratch, home = lay["scratch"], lay["home"]
+    return (
+        _dais_ssh_bind() + "--bind /dev/infiniband:/dev/infiniband "
+        "--bind /dais:/dais "
+        f"--bind {scratch}/tmp:/tmp "
+        "--bind $CCACHE:$CCACHE "
+        f"--bind {scratch}/models/social_deduction:/opt/models "
+        f"--bind {home}/models_permanent/social_deduction:/opt/models_ro:ro "
+        + _HF_BINDS_AND_ENVS
+        + _cache_tail()
+    )
 
-_MARLLM_RAVEN_BINDS = (
-    "--bind /ptmp/ykeller/cc/tmp:/tmp "
-    "--bind $CCACHE:$CCACHE " + _HF_BINDS_AND_ENVS + "--env TMPDIR=/tmp "
-    "--env TRITON_CACHE_DIR=$CCACHE/triton "
-    "--env TORCH_EXTENSIONS_DIR=$CCACHE/torch_ext "
-    "--env FLASHINFER_WORKSPACE_BASE=$CCACHE/flashinfer "
-    "--env VLLM_NO_USAGE_STATS=1 "
-)
+
+def _coopbot_binds() -> str:
+    lay = layout_for_cluster("dais")
+    scratch, home = lay["scratch"], lay["home"]
+    return (
+        _dais_ssh_bind() + "--bind /dev/infiniband:/dev/infiniband "
+        "--bind /dais:/dais "
+        f"--bind {scratch}/tmp:/tmp "
+        "--bind $CCACHE:$CCACHE "
+        f"--bind {scratch}/models/coopbot:/opt/models "
+        f"--bind {home}/models_permanent/coopbot:/opt/models_ro:ro "
+        + _HF_BINDS_AND_ENVS
+        + _cache_tail()
+    )
+
+
+def _silicon_sampling_binds() -> str:
+    scratch = layout_for_cluster("dais")["scratch"]
+    return (
+        _dais_ssh_bind() + "--bind /dev/infiniband:/dev/infiniband "
+        "--bind /dais:/dais "
+        f"--bind {scratch}/tmp:/tmp "
+        "--bind $CCACHE:$CCACHE " + _HF_BINDS_AND_ENVS + _cache_tail()
+    )
+
+
+def _marllm_raven_binds() -> str:
+    scratch = layout_for_cluster("raven")["scratch"]
+    return (
+        f"--bind {scratch}/tmp:/tmp "
+        "--bind $CCACHE:$CCACHE " + _HF_BINDS_AND_ENVS + _cache_tail()
+    )
 
 _MARLLM_ARRHENIUS_BINDS = (
     "--bind /nobackup:/nobackup "
@@ -96,10 +123,6 @@ _MARLLM_ARRHENIUS_BINDS = (
 
 # MARLLM on DAIS has no project-specific model trees; HF cache + generic
 # DAIS scratch binds match silicon_sampling.
-_MARLLM_DAIS_BINDS = _SILICON_SAMPLING_BINDS
-
-# Backwards-compatible alias used by existing tests / callers that assume raven.
-_MARLLM_BINDS = _MARLLM_RAVEN_BINDS
 
 
 def _resolve_cluster(cc_project: str, cluster: str = "") -> str:
@@ -118,17 +141,17 @@ def _resolve_cluster(cc_project: str, cluster: str = "") -> str:
 def _apptainer_binds(cc_project: str, cluster: str = "") -> str:
     cluster = _resolve_cluster(cc_project, cluster)
     if cc_project == "coopbot":
-        return _COOPBOT_BINDS
+        return _coopbot_binds()
     if cc_project == "social_deduction":
-        return _SOCIAL_DEDUCTION_BINDS
+        return _social_deduction_binds()
     if cc_project == "silicon_sampling":
-        return _SILICON_SAMPLING_BINDS
+        return _silicon_sampling_binds()
     if cc_project == "MARLLM":
         if cluster == "dais":
-            return _MARLLM_DAIS_BINDS
+            return _silicon_sampling_binds()
         if cluster == "arrhenius":
             return _MARLLM_ARRHENIUS_BINDS
-        return _MARLLM_RAVEN_BINDS
+        return _marllm_raven_binds()
     raise ValueError(f"unsupported cc_project for vLLM setup: {cc_project!r}")
 
 
@@ -158,10 +181,10 @@ def _vllm_log_root(cc_project: str, cluster: str = "") -> str:
     ):
         raise ValueError(f"unsupported cc_project for vLLM setup: {cc_project!r}")
     if cluster == "raven":
-        return _RAVEN_VLLM_LOG_ROOT
+        return _raven_vllm_log_root()
     if cluster == "arrhenius":
         return _ARRHENIUS_VLLM_LOG_ROOT
-    return _DAIS_VLLM_LOG_ROOT
+    return _dais_vllm_log_root()
 
 
 def _format_gpu_ids(gpu_ids: List[int]) -> str:

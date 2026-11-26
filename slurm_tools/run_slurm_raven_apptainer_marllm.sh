@@ -20,8 +20,10 @@ module load apptainer
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 export MASTER_PORT=29500
-export CCACHE=/ptmp/ykeller/cc/container_cache
-export HF_HOST=/ptmp/ykeller/cc/huggingface
+export CCACHE={scratch}/container_cache
+export HF_HOST={scratch}/huggingface
+
+mkdir -p {scratch}/cluster_sync
 
 export CMD="{distribute} {program_call}"
 
@@ -35,19 +37,22 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --no-mount cwd,tmp,bind-paths \
     --cleanenv \
     --writable-tmpfs \
+    --bind /etc/hosts:/etc/hosts \
+    --bind /etc/resolv.conf:/etc/resolv.conf \
     --nv \
-    --bind /ptmp/ykeller/cc/tmp:/tmp \
-    --bind /ptmp/ykeller/cc/container_outputs:/opt/outputs \
-    --bind /ptmp/ykeller/cc/cluster_transfer:/opt/cluster_transfer \
-    --bind /ptmp/ykeller/cc/data:/opt/data \
+    --bind {scratch}/tmp:/tmp \
+    --bind {scratch}/container_outputs:/opt/outputs \
+    --bind {scratch}/cluster_transfer:/opt/cluster_transfer \
+    --bind {scratch}/cluster_sync:/opt/cluster_sync \
+    --bind {scratch}/data:/opt/data \
     --bind \$CCACHE:\$CCACHE \
     --bind \$HF_HOST:/opt/huggingface \
-    --bind /u/ykeller/MARL-LM:/opt/MARL-LM \
-    --bind /u/ykeller/social_deduction_llm:/opt/sh_finetuning \
-    --bind /u/ykeller/runs:/opt/MARL-LM/runs \
-    --bind /u/ykeller/runs:/opt/runs \
+    --bind {repo_root}/MARL-LM:/opt/MARL-LM \
+    --bind {repo_root}/social_deduction_llm:/opt/sh_finetuning \
+    --bind {home}/runs:/opt/MARL-LM/runs \
+    --bind {home}/runs:/opt/runs \
     --bind /dev/infiniband:/dev/infiniband \
-    --home /ptmp/ykeller/cc/apptainer-home:/home/\$USER \
+    --home {scratch}/apptainer-home:/home/\$USER \
     --env PYTHONPATH=/opt/MARL-LM \
     --env TRITON_CACHE_DIR=\$CCACHE/triton \
     --env TORCH_EXTENSIONS_DIR=\$CCACHE/torch_ext \
@@ -58,7 +63,7 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --env HF_DATASETS_CACHE=/opt/huggingface/datasets \
     --env FLASHINFER_WORKSPACE_BASE=\$CCACHE/flashinfer \
     --env WANDB_DIR=\$CCACHE/wandb \
-    --env WANDB_MODE=offline \
+    --env WANDB_MODE={wandb_mode} \
     --env WANDB_ENTITY=chm-hci \
     --env WANDB_PROJECT={project_name} \
     --env WANDB_RUN_GROUP={experiment_name} \
@@ -72,7 +77,7 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --env SLURM_NNODES=\$SLURM_NNODES \
     --env SLURM_JOBID=\$SLURM_JOBID \
     --env CUDA_VISIBLE_DEVICES={cuda_visible_devices} \
-    --env-file /u/ykeller/private/cc_secrets \
+    --env-file {secrets_file} \
     --pwd /opt/MARL-LM \
     {image} \
     bash -c \"\$CMD\""

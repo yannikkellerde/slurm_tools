@@ -1,4 +1,11 @@
+from slurm_tools.cluster_layout import layout_for_cluster
 from slurm_tools.vllm_setup import VLLM_IMAGE, VLLM_LOG_ROOT, build_vllm_setup
+
+_DAIS_SSH = (
+    "--bind "
+    + layout_for_cluster("dais")["home"]
+    + "/private/cc_ssh_mount:$HOME/.ssh"
+)
 
 
 def test_build_vllm_setup_generates_pattern_a_block():
@@ -27,6 +34,7 @@ def test_build_vllm_setup_generates_pattern_a_block():
     assert "CUDA_VISIBLE_DEVICES=7 apptainer exec" in setup
     assert VLLM_IMAGE in setup
     assert "--bind /dev/infiniband:/dev/infiniband" in setup
+    assert _DAIS_SSH in setup
     assert "--bind $HF_HOST:/opt/huggingface" in setup
     assert "--env HF_HOME=/opt/huggingface" in setup
     assert "--env HF_HUB_CACHE=/opt/huggingface/hub" in setup
@@ -119,11 +127,13 @@ def test_build_vllm_setup_marllm_uses_raven_image_and_binds():
         n_gpu=4,
         cc_project="MARLLM",
     )
+    raven = layout_for_cluster("raven")
     assert "/raven/ptmp/ykeller/cc/containers/apptainer/vllm-openai_latest.sif" in setup
-    assert "VLLM_LOG_DIR=/ptmp/ykeller/cc/tmp/vllm_logs/job_123" in setup
-    assert "--bind /ptmp/ykeller/cc/tmp:/tmp" in setup
+    assert f"VLLM_LOG_DIR={raven['scratch']}/tmp/vllm_logs/job_123" in setup
+    assert f"--bind {raven['scratch']}/tmp:/tmp" in setup
     assert "--bind $HF_HOST:/opt/huggingface" in setup
     assert "/dais/" not in setup
+    assert "cc_ssh_mount" not in setup
     assert main_gpus == "0,1,2"
 
 
@@ -151,6 +161,7 @@ def test_build_vllm_setup_marllm_dais_uses_dais_image_and_binds():
     assert f"VLLM_LOG_DIR={VLLM_LOG_ROOT}/job_123" in setup
     assert "--bind /dais:/dais" in setup
     assert "--bind /dev/infiniband:/dev/infiniband" in setup
+    assert _DAIS_SSH in setup
     assert "--bind $HF_HOST:/opt/huggingface" in setup
     assert "/ptmp/" not in setup
     assert "/raven/" not in setup
@@ -184,6 +195,7 @@ def test_build_vllm_setup_marllm_arrhenius_uses_nobackup_image_and_binds():
     assert f"--bind {personal}/cc/tmp:/tmp" in setup
     assert "/dais/" not in setup
     assert "/ptmp/" not in setup
+    assert "cc_ssh_mount" not in setup
     assert main_gpus == "0,1,2"
 
 
@@ -210,6 +222,7 @@ def test_build_vllm_setup_silicon_sampling_uses_dais_generic_binds():
     assert f"VLLM_LOG_DIR={VLLM_LOG_ROOT}/job_123" in setup
     assert "--bind /dais:/dais" in setup
     assert "--bind /dev/infiniband:/dev/infiniband" in setup
+    assert _DAIS_SSH in setup
     assert "--bind $HF_HOST:/opt/huggingface" in setup
     assert "models/social_deduction" not in setup
     assert "models/coopbot" not in setup
@@ -236,4 +249,6 @@ def test_build_vllm_setup_coopbot_binds_infiniband():
         cc_project="coopbot",
     )
     assert "--bind /dev/infiniband:/dev/infiniband" in setup
-    assert "--bind /dais/fs/scratch/ykeller/models/coopbot:/opt/models" in setup
+    assert _DAIS_SSH in setup
+    dais = layout_for_cluster("dais")
+    assert f"--bind {dais['scratch']}/models/coopbot:/opt/models" in setup

@@ -21,8 +21,10 @@ module load apptainer
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 export MASTER_PORT=29500
-export CCACHE=/dais/fs/scratch/ykeller/container_cache
-export HF_HOST=/dais/fs/scratch/ykeller/huggingface
+export CCACHE={scratch}/container_cache
+export HF_HOST={scratch}/huggingface
+
+mkdir -p {scratch}/cluster_sync
 
 export CMD="{distribute} {program_call}"
 
@@ -38,17 +40,21 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --writable-tmpfs \
     --nv \
     --bind /dev/infiniband:/dev/infiniband \
-    --bind /dais/fs/scratch/ykeller/tmp:/tmp \
-    --bind /dais/fs/scratch/ykeller/container_outputs:/opt/outputs \
-    --bind /u/ykeller/data/social_deduction:/opt/data/social_deduction \
-    --bind /dais/fs/scratch/ykeller/models/social_deduction:/opt/models \
-    --bind /u/ykeller/models_permanent/social_deduction:/opt/models_ro:ro \
-    --bind /dais/fs/scratch/ykeller/cluster_transfer:/opt/cluster_transfer \
+    --bind /etc/hosts:/etc/hosts \
+    --bind /etc/resolv.conf:/etc/resolv.conf \
+    --bind {scratch}/tmp:/tmp \
+    --bind {scratch}/container_outputs:/opt/outputs \
+    --bind {home}/data/social_deduction:/opt/data/social_deduction \
+    --bind {scratch}/models/social_deduction:/opt/models \
+    --bind {home}/models_permanent/social_deduction:/opt/models_ro:ro \
+    --bind {scratch}/cluster_transfer:/opt/cluster_transfer \
+    --bind {scratch}/cluster_sync:/opt/cluster_sync \
     --bind \$CCACHE:\$CCACHE \
     --bind \$HF_HOST:/opt/huggingface \
-    --bind /u/ykeller/github_repos/social_deduction_llm:/opt/sh_finetuning \
-    --bind /u/ykeller/runs:/opt/runs:ro \
-    --home /dais/fs/scratch/ykeller/apptainer-home:/home/\$USER \
+    --bind {repo_root}/social_deduction_llm:/opt/sh_finetuning \
+    --bind {home}/runs:/opt/runs:ro \
+    --home {scratch}/apptainer-home:/home/\$USER \
+    --bind {home}/private/cc_ssh_mount:/home/\$USER/.ssh \
     --env PYTHONPATH=/opt/sh_finetuning \
     --env TRITON_CACHE_DIR=\$CCACHE/triton \
     --env TORCH_EXTENSIONS_DIR=\$CCACHE/torch_ext \
@@ -59,7 +65,7 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --env HF_DATASETS_CACHE=/opt/huggingface/datasets \
     --env FLASHINFER_WORKSPACE_BASE=\$CCACHE/flashinfer \
     --env WANDB_DIR=\$CCACHE/wandb \
-    --env WANDB_MODE=offline \
+    --env WANDB_MODE={wandb_mode} \
     --env WANDB_ENTITY=chm-hci \
     --env WANDB_PROJECT={project_name} \
     --env WANDB_RUN_GROUP={experiment_name} \
@@ -73,7 +79,7 @@ srun bash -c "{main_cuda_prefix}apptainer exec \
     --env SLURM_NNODES=\$SLURM_NNODES \
     --env SLURM_JOBID=\$SLURM_JOBID \
     --env CUDA_VISIBLE_DEVICES={cuda_visible_devices} \
-    --env-file /u/ykeller/private/cc_secrets \
+    --env-file {secrets_file} \
     --pwd /opt/sh_finetuning \
     {image} \
     bash -c \"\$CMD\""

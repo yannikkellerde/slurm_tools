@@ -17,10 +17,10 @@
 
 echo $(date)
 source {cinit}
-source /u/ykeller/private/set_slack_env.sh
+source {home}/private/set_slack_env.sh
 mamba activate {conda_env}
 module load {modules}
-source /u/ykeller/private/set_cuda_env.sh
+source {home}/private/set_cuda_env.sh
 
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 export MASTER_PORT=29500

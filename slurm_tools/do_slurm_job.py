@@ -1,12 +1,64 @@
 import argparse
 import os
+import re
 import subprocess
 from datetime import datetime
 
+from slurm_tools.cluster_layout import layout_for_template
 from slurm_tools.slurm_time_until_start import find_n_gpu, find_n_nodes
 from slurm_tools.vllm_setup import build_vllm_setup
 
 basedir = os.path.dirname(os.path.abspath(__file__))
+
+WANDB_MODE_CHOICES = ("offline", "online")
+_COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_ALGOINST_CONTAINER_REPO = "/opt/algorithmic-institutions"
+
+
+def algoinst_repo_binds(checkout: str, home: str, repo_root: str) -> str:
+    """Bind flags for the algoinst template.
+
+    Empty ``checkout`` is the live tree. A sha bind-mounts that snapshot
+    read-only: its files are hardlinked across snapshots, so a write
+    into ``src/`` would change older snapshots. The shared artifacts
+    tree stays read-only. ``plots/`` and ``.log/`` are mounted afterwards
+    from a per-sha directory and stay writable.
+    """
+    live = f"{repo_root}/algorithmic-institutions"
+    if not checkout:
+        return f"--bind {live}:{_ALGOINST_CONTAINER_REPO}"
+    if not _COMMIT_SHA_RE.fullmatch(checkout):
+        raise ValueError(
+            f"checkout must be a 40-character sha, got {checkout!r}"
+        )
+    snap = f"{home}/cc-snapshots/{checkout}"
+    out = f"{home}/cc-snapshot-outputs/{checkout}"
+    opt = _ALGOINST_CONTAINER_REPO
+    return " \\\n    ".join(
+        [
+            f"--bind {snap}:{opt}:ro",
+            f"--bind {live}/artifacts:{opt}/artifacts:ro",
+            f"--bind {out}/plots:{opt}/plots",
+            f"--bind {out}/.log:{opt}/.log",
+        ]
+    )
+
+
+def algoinst_snapshot_mkdir(checkout: str, home: str) -> str:
+    """Host-side setup inserted above the srun line. Empty when unused."""
+    if not checkout:
+        return ""
+    if not _COMMIT_SHA_RE.fullmatch(checkout):
+        raise ValueError(
+            f"checkout must be a 40-character sha, got {checkout!r}"
+        )
+    snap = f"{home}/cc-snapshots/{checkout}"
+    out = f"{home}/cc-snapshot-outputs/{checkout}"
+    return (
+        f'if [ ! -d {snap} ]; then echo "snapshot {checkout} is not on '
+        f'the cluster" >&2; exit 1; fi\n'
+        f"mkdir -p {out}/plots {out}/.log\n"
+    )
 
 
 def generate_local_job_id():
@@ -50,6 +102,8 @@ def slurm_job(
     cc_project: str,
     reservation: str,
     cluster: str = "",
+    wandb_mode: str = "offline",
+    checkout: str = "",
     **_kwargs,
 ):
     program_file = (
@@ -64,6 +118,15 @@ def slurm_job(
             raise FileNotFoundError(
                 f"Program file {program_file} not found. You sure that you are in the correct directory?"
             )
+
+    if wandb_mode not in WANDB_MODE_CHOICES:
+        raise ValueError(
+            f"wandb_mode must be one of {WANDB_MODE_CHOICES}; got {wandb_mode!r}"
+        )
+    # Validate before any other work so a bad sha does not write a job dir.
+    layout = layout_for_template(template_file)
+    repo_binds = algoinst_repo_binds(checkout, layout["home"], layout["repo_root"])
+    snapshot_mkdir = algoinst_snapshot_mkdir(checkout, layout["home"])
 
     if n_gpu == 1 and n_nodes == 1:
         if launcher in ["accelerate", "torchrun"]:
@@ -164,6 +227,13 @@ def slurm_job(
         vllm_setup=vllm_setup,
         main_cuda_prefix=main_cuda_prefix,
         cuda_visible_devices=cuda_visible_devices,
+        wandb_mode=wandb_mode,
+        repo_binds=repo_binds,
+        snapshot_mkdir=snapshot_mkdir,
+        home=layout["home"],
+        scratch=layout["scratch"],
+        repo_root=layout["repo_root"],
+        secrets_file=layout["secrets_file"],
     )
 
     if keepalive:
@@ -183,7 +253,12 @@ def slurm_job(
             )
 
     with open(template_file, "r") as file:
-        script = file.read().format(**format_dict)
+        template = file.read()
+    if checkout and "{repo_binds}" not in template:
+        raise ValueError(
+            "checkout is set but the template has no {repo_binds} placeholder"
+        )
+    script = template.format(**format_dict)
 
     output_path = os.path.join(job_specific_dir, "slurm_script.sh")
     with open(output_path, "w") as file:
@@ -322,6 +397,23 @@ def obtain_parser():
             "Omit to infer from --cc_project (MARLLM→raven, else dais)."
         ),
     )
+    parser.add_argument(
+        "--wandb_mode",
+        type=str,
+        default="offline",
+        choices=list(WANDB_MODE_CHOICES),
+        help="WANDB_MODE inside the container (default: offline).",
+    )
+    parser.add_argument(
+        "--checkout",
+        type=str,
+        default="",
+        help=(
+            "algoinst only: 40-character sha to bind-mount from "
+            "the Raven home cc-snapshots directory instead of the live checkout. "
+            "Empty keeps the live checkout."
+        ),
+    )
 
     return parser
 
@@ -342,5 +434,5 @@ if __name__ == "__main__":
     main()
 
 """
-slurm_job --n_gpu 1 --time 02:00:00 --launcher accelerate --n_nodes 1 --program_call "sh_finetuning/__main__.py train_sft --config_path configs/training_arguments/sft.yml --model_name Qwen/Qwen2.5-3B" --mem 0 --conda_env deepspeed --project sh_finetuning --run_group deepspeed --template_file /u/ykeller/github_repos/slurm_tools/slurm_tools/run_slurm_dais_modules.sh --cinit /u/ykeller/.mamba_init --n_cpu 96 --modules "gcc/14 cuda/12.8" --extra_arg "The test job" --acc_config configs/accelerate/deepspeed.yml
+slurm_job --n_gpu 1 --time 02:00:00 --launcher accelerate --n_nodes 1 --program_call "sh_finetuning/__main__.py train_sft --config_path configs/training_arguments/sft.yml --model_name Qwen/Qwen2.5-3B" --mem 0 --conda_env deepspeed --project sh_finetuning --run_group deepspeed --template_file ~/github_repos/slurm_tools/slurm_tools/run_slurm_dais_modules.sh --cinit ~/.mamba_init --n_cpu 96 --modules "gcc/14 cuda/12.8" --extra_arg "The test job" --acc_config configs/accelerate/deepspeed.yml
 """

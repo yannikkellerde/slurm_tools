@@ -39,7 +39,7 @@ export WANDB_ENTITY="chm-hci" \
 export WANDB_PROJECT="{project_name}" \
 export WANDB_RUN_GROUP="{experiment_name}" \
 export WANDB_NAME="{job_id}" \
-export HF_HOME="/u/ykeller/.cache/huggingface" \
+export HF_HOME="{home}/.cache/huggingface" \
 
 echo "START TIME: $(date)"
 

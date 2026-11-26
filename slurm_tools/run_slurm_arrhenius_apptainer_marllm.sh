@@ -23,6 +23,8 @@ export APPTAINER_CACHEDIR=/nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yann
 export CCACHE=/nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik/cc/container_cache
 export HF_HOST=/nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik/cc/huggingface
 
+mkdir -p /nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik/cc/cluster_sync
+
 export CMD="{distribute} {program_call}"
 
 echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT"
@@ -74,6 +76,7 @@ fi; \
     --bind /nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik/cc/tmp:/tmp \
     --bind /nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik/cc/container_outputs:/opt/outputs \
     --bind /nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik/cc/cluster_transfer:/opt/cluster_transfer \
+    --bind /nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik/cc/cluster_sync:/opt/cluster_sync \
     --bind /nobackup/proj/disk/ehpc-dev-2026d09-182/personal/yannik/cc/data:/opt/data \
     --bind \$CCACHE:\$CCACHE \
     --bind \$HF_HOST:/opt/huggingface \
@@ -92,7 +95,7 @@ fi; \
     --env HF_DATASETS_CACHE=/opt/huggingface/datasets \
     --env FLASHINFER_WORKSPACE_BASE=\$CCACHE/flashinfer \
     --env WANDB_DIR=\$CCACHE/wandb \
-    --env WANDB_MODE=offline \
+    --env WANDB_MODE={wandb_mode} \
     --env LD_LIBRARY_PATH=/opt/host/cxi/lib:/software/sse2/el9_gh200/manual/AWS_OFI_NCCL/1.19.2/g14/cu13.0/mp43/hpc1/lib \
     --env NCCL_PROTO=^LL128 \
     --env NCCL_CROSS_NIC=1 \
